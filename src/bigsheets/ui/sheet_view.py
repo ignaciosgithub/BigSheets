@@ -230,6 +230,10 @@ class SheetView(QTableView):
         insert_function_action.triggered.connect(self.insert_function)
         menu.addAction(insert_function_action)
         
+        modify_function_action = QAction("Modify Function...", self)
+        modify_function_action.triggered.connect(self.modify_function)
+        menu.addAction(modify_function_action)
+        
         manage_functions_action = QAction("Manage Functions...", self)
         manage_functions_action.triggered.connect(self.manage_functions)
         menu.addAction(manage_functions_action)
@@ -524,6 +528,47 @@ class SheetView(QTableView):
             selected_data = self.get_selected_data()
             
             self.sheet.execute_function(row, col, function_id, selected_data)
+            
+            self.model.dataChanged.emit(
+                self.model.index(row, col),
+                self.model.index(row, col)
+            )
+    
+    def modify_function(self):
+        """Modify a function at the current cell position."""
+        current_index = self.currentIndex()
+        if not current_index.isValid():
+            return
+            
+        row, col = current_index.row(), current_index.column()
+        cell = self.sheet.get_cell(row, col)
+        
+        if not hasattr(cell, "function_id") or not cell.function_id:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "No Function Found",
+                "This cell does not contain a function. Please select a cell with a function to modify."
+            )
+            return
+            
+        function_manager = FunctionManager()
+        function_template = function_manager.get_template(cell.function_id)
+        
+        if not function_template:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Function Not Found",
+                "The function associated with this cell could not be found."
+            )
+            return
+            
+        from PyQt5.QtWidgets import QDialog
+        dialog = FunctionEditorDialog(self, function_manager, function_template.id)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_data = self.get_selected_data()
+            self.sheet.execute_function(row, col, function_template.id, selected_data)
             
             self.model.dataChanged.emit(
                 self.model.index(row, col),
