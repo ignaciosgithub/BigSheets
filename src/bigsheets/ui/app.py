@@ -16,6 +16,8 @@ from bigsheets.core.spreadsheet_engine import Workbook, Sheet
 from bigsheets.ui.sheet_view import SheetView
 from bigsheets.data.csv_importer import CSVImporter
 from bigsheets.data.db_connector import DatabaseConnector
+from bigsheets.function_engine.function_manager import FunctionManager
+from bigsheets.ui.function_editor import FunctionEditorDialog
 
 
 class BigSheetsApp(QMainWindow):
@@ -29,6 +31,8 @@ class BigSheetsApp(QMainWindow):
         self.workbook = Workbook()
         self.workbook.create_sheet("Sheet1")
         
+        self.function_manager = FunctionManager()
+        
         self.init_ui()
         self.show()
     
@@ -37,7 +41,9 @@ class BigSheetsApp(QMainWindow):
         self.setWindowTitle("BigSheets")
         self.setGeometry(100, 100, 1200, 800)
         
+        self.menuBar().setVisible(True)
         self.create_menu_bar()
+        self.menuBar().setVisible(True)
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -56,76 +62,93 @@ class BigSheetsApp(QMainWindow):
     
     def create_menu_bar(self):
         """Create the application menu bar."""
-        file_menu = self.menuBar().addMenu("&File")
-        
-        new_action = QAction("&New", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.new_workbook)
-        file_menu.addAction(new_action)
-        
-        open_action = QAction("&Open", self)
-        open_action.setShortcut("Ctrl+O")
-        open_action.triggered.connect(self.open_workbook)
-        file_menu.addAction(open_action)
-        
-        save_action = QAction("&Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_workbook)
-        file_menu.addAction(save_action)
-        
-        save_as_action = QAction("Save &As", self)
-        save_as_action.setShortcut("Ctrl+Shift+S")
-        save_as_action.triggered.connect(self.save_workbook_as)
-        file_menu.addAction(save_as_action)
-        
-        file_menu.addSeparator()
-        
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-        
-        edit_menu = self.menuBar().addMenu("&Edit")
-        
-        undo_action = QAction("&Undo", self)
-        undo_action.setShortcut("Ctrl+Z")
-        undo_action.triggered.connect(self.undo)
-        edit_menu.addAction(undo_action)
-        
-        redo_action = QAction("&Redo", self)
-        redo_action.setShortcut("Ctrl+Y")
-        redo_action.triggered.connect(self.redo)
-        edit_menu.addAction(redo_action)
-        
-        sheet_menu = self.menuBar().addMenu("&Sheet")
-        
-        add_sheet_action = QAction("&Add Sheet", self)
-        add_sheet_action.triggered.connect(self.add_sheet)
-        sheet_menu.addAction(add_sheet_action)
-        
-        rename_sheet_action = QAction("&Rename Sheet", self)
-        rename_sheet_action.triggered.connect(self.rename_sheet)
-        sheet_menu.addAction(rename_sheet_action)
-        
-        data_menu = self.menuBar().addMenu("&Data")
-        
-        import_csv_action = QAction("Import &CSV", self)
-        import_csv_action.triggered.connect(self.import_csv)
-        data_menu.addAction(import_csv_action)
-        
-        import_db_action = QAction("Import from &Database", self)
-        import_db_action.triggered.connect(self.import_database)
-        data_menu.addAction(import_db_action)
-        
-        insert_menu = self.menuBar().addMenu("&Insert")
-        
-        insert_chart_action = QAction("&Chart", self)
-        insert_chart_action.triggered.connect(self.insert_chart)
-        insert_menu.addAction(insert_chart_action)
-        
-        insert_image_action = QAction("&Image", self)
-        insert_image_action.triggered.connect(self.insert_image)
-        insert_menu.addAction(insert_image_action)
+        try:
+            file_menu = self.menuBar().addMenu("&File")
+            
+            new_action = QAction("&New", self)
+            new_action.setShortcut("Ctrl+N")
+            new_action.triggered.connect(self.new_workbook)
+            file_menu.addAction(new_action)
+            
+            open_action = QAction("&Open", self)
+            open_action.setShortcut("Ctrl+O")
+            open_action.triggered.connect(self.open_workbook)
+            file_menu.addAction(open_action)
+            
+            save_action = QAction("&Save", self)
+            save_action.setShortcut("Ctrl+S")
+            save_action.triggered.connect(self.save_workbook)
+            file_menu.addAction(save_action)
+            
+            save_as_action = QAction("Save &As", self)
+            save_as_action.setShortcut("Ctrl+Shift+S")
+            save_as_action.triggered.connect(self.save_workbook_as)
+            file_menu.addAction(save_as_action)
+            
+            file_menu.addSeparator()
+            
+            exit_action = QAction("E&xit", self)
+            exit_action.setShortcut("Ctrl+Q")
+            exit_action.triggered.connect(self.close)
+            file_menu.addAction(exit_action)
+            
+            edit_menu = self.menuBar().addMenu("&Edit")
+            
+            undo_action = QAction("&Undo", self)
+            undo_action.setShortcut("Ctrl+Z")
+            undo_action.triggered.connect(self.undo)
+            edit_menu.addAction(undo_action)
+            
+            redo_action = QAction("&Redo", self)
+            redo_action.setShortcut("Ctrl+Y")
+            redo_action.triggered.connect(self.redo)
+            edit_menu.addAction(redo_action)
+            
+            sheet_menu = self.menuBar().addMenu("&Sheet")
+            
+            add_sheet_action = QAction("&Add Sheet", self)
+            add_sheet_action.triggered.connect(self.add_sheet)
+            sheet_menu.addAction(add_sheet_action)
+            
+            rename_sheet_action = QAction("&Rename Sheet", self)
+            rename_sheet_action.triggered.connect(self.rename_sheet)
+            sheet_menu.addAction(rename_sheet_action)
+            
+            data_menu = self.menuBar().addMenu("&Data")
+            
+            import_csv_action = QAction("Import &CSV", self)
+            import_csv_action.triggered.connect(self.import_csv)
+            data_menu.addAction(import_csv_action)
+            
+            import_db_action = QAction("Import from &Database", self)
+            import_db_action.triggered.connect(self.import_database)
+            data_menu.addAction(import_db_action)
+            
+            insert_menu = self.menuBar().addMenu("&Insert")
+            
+            insert_chart_action = QAction("&Chart", self)
+            insert_chart_action.triggered.connect(self.insert_chart)
+            insert_menu.addAction(insert_chart_action)
+            
+            insert_image_action = QAction("&Image", self)
+            insert_image_action.triggered.connect(self.insert_image)
+            insert_menu.addAction(insert_image_action)
+            
+            functions_menu = self.menuBar().addMenu("&Functions")
+            functions_menu.setVisible(True)
+            
+            function_editor_action = QAction("&Function Editor", self)
+            function_editor_action.setShortcut("Ctrl+F")
+            function_editor_action.triggered.connect(self.open_function_editor)
+            functions_menu.addAction(function_editor_action)
+            
+            self.menuBar().setVisible(True)
+            self.menuBar().update()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error creating menu bar: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to initialize menu bar: {str(e)}")
     
     def add_sheet_tab(self, sheet_name):
         """Add a new sheet tab to the tab widget."""
@@ -414,3 +437,42 @@ class BigSheetsApp(QMainWindow):
         if current_index >= 0:
             sheet_view = self.tab_widget.widget(current_index)
             sheet_view.insert_image()
+    
+    def open_function_editor(self):
+        """Open the function editor dialog."""
+        try:
+            print("Opening function editor dialog...")
+            if not hasattr(self, 'function_manager') or self.function_manager is None:
+                self.function_manager = FunctionManager()
+                print("Function manager initialized")
+            
+            dialog = FunctionEditorDialog(self, self.function_manager)
+            print("Function editor dialog created successfully")
+            dialog.setModal(True)
+            dialog.show()  # Show the dialog first
+            result = dialog.exec_()  # Then execute it
+            print(f"Dialog execution result: {result}")
+            self.statusBar().showMessage("Function templates updated")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error opening function editor: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to open function editor: {str(e)}")
+            
+    def keyPressEvent(self, event):
+        """Handle key press events globally."""
+        from PyQt5.QtGui import QKeySequence
+        from PyQt5.QtCore import Qt
+        
+        if (event.modifiers() & Qt.ControlModifier) and event.key() == Qt.Key_F:
+            self.open_function_editor()
+            return
+            
+        if (event.modifiers() & Qt.ControlModifier) and (event.modifiers() & Qt.ShiftModifier) and event.key() == Qt.Key_F:
+            current_index = self.tab_widget.currentIndex()
+            if current_index >= 0:
+                sheet_view = self.tab_widget.widget(current_index)
+                sheet_view.insert_function()
+            return
+            
+        super().keyPressEvent(event)

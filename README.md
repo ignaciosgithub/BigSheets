@@ -32,7 +32,22 @@ A next-generation spreadsheet application that goes beyond traditional cell-base
 
 ## Installation
 
-*Coming soon*
+### Dependencies
+
+#### Linux
+If you're running on Linux, you may need to install the following packages for Qt to function correctly:
+
+```bash
+sudo apt-get install -y libxcb1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-randr0 libxcb-xkb1 libxkbcommon-x11-0
+```
+
+#### Environment Variables
+The application uses the following environment variables:
+
+- `QT_QPA_PLATFORM`: Specifies the Qt platform plugin to use. Default is "xcb;offscreen" which will try xcb first, then fall back to offscreen.
+- `QT_DEBUG_PLUGINS`: Set to "1" to enable debugging of Qt plugins.
+
+*More installation instructions coming soon*
 
 ## Usage
 

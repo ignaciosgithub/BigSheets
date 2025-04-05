@@ -6,12 +6,14 @@ This module provides the UI component for displaying and interacting with a shee
 
 from PyQt5.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu, QAction,
-    QStyledItemDelegate, QStyleOptionViewItem, QWidget
+    QStyledItemDelegate, QStyleOptionViewItem, QWidget, QDialog
 )
 from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex, QVariant
 from PyQt5.QtGui import QColor, QBrush, QPainter
 
 from bigsheets.core.spreadsheet_engine import Sheet
+from bigsheets.function_engine.function_manager import FunctionManager
+from bigsheets.ui.function_editor import FunctionEditorDialog
 
 
 class SheetTableModel(QAbstractTableModel):
@@ -220,6 +222,21 @@ class SheetView(QTableView):
         insert_image_action = QAction("Insert Image...", self)
         insert_image_action.triggered.connect(self.insert_image)
         menu.addAction(insert_image_action)
+        
+        menu.addSeparator()
+        
+        insert_function_action = QAction("Insert Function...", self)
+        insert_function_action.setShortcut("Ctrl+Shift+F")
+        insert_function_action.triggered.connect(self.insert_function)
+        menu.addAction(insert_function_action)
+        
+        modify_function_action = QAction("Modify Function...", self)
+        modify_function_action.triggered.connect(self.modify_function)
+        menu.addAction(modify_function_action)
+        
+        manage_functions_action = QAction("Manage Functions...", self)
+        manage_functions_action.triggered.connect(self.manage_functions)
+        menu.addAction(manage_functions_action)
 
         menu.exec_(event.globalPos())
 
@@ -355,17 +372,22 @@ class SheetView(QTableView):
                 data.append(row_data)
 
             chart_engine = ChartEngine()
-            chart_type_str = chart_type.currentText().lower().replace(" ", "_")
+            chart_type_str = chart_type.currentText().lower().split()[0]  # Use first word only (bar, line, pie, scatter)
 
-            chart = chart_engine.create_chart(
-                chart_type=chart_type_str,
-                data=data,
-                title=f"{chart_type.currentText()} - {min_row},{min_col} to {max_row},{max_col}",
-                x_label=f"Row {min_row}",
-                y_label="Values"
-            )
-
-            self.sheet.add_chart(chart, min_row, min_col)
+            try:
+                chart = chart_engine.create_chart(
+                    chart_type=chart_type_str,
+                    data=data,
+                    title=f"{chart_type.currentText()} - {min_row},{min_col} to {max_row},{max_col}",
+                    x_label=f"Row {min_row}",
+                    y_label="Values"
+                )
+                
+                self.sheet.add_chart(chart, min_row, min_col)
+                self.model.dataChanged.emit(self.model.index(min_row, min_col), self.model.index(min_row, min_col))
+            except ValueError as e:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Chart Error", f"Failed to create chart: {str(e)}")
 
     def insert_image(self):
         """Insert an image at the current position."""
@@ -449,3 +471,262 @@ class SheetView(QTableView):
         line_height = font_metrics.height() + 6  # Add padding
 
         self.setRowHeight(row, line_height)
+        
+    def insert_function(self):
+        """Insert a function at the current position."""
+        current_index = self.currentIndex()
+        if not current_index.isValid():
+            return
+        
+        row, col = current_index.row(), current_index.column()
+        
+        function_manager = FunctionManager()
+        templates = function_manager.list_templates()
+        
+        if not any(t.get("name") == "Sum Columns" for t in templates):
+            self.create_predefined_templates(function_manager)
+            templates = function_manager.list_templates()
+        
+        if not templates:
+            from PyQt5.QtWidgets import QMessageBox
+            result = QMessageBox.question(
+                self,
+                "No Functions Available",
+                "No function templates found. Would you like to create one?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            
+            if result == QMessageBox.Yes:
+                self.manage_functions()
+            
+            return
+        
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QListWidget, QDialogButtonBox, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Select Function")
+        layout = QVBoxLayout(dialog)
+        
+        layout.addWidget(QLabel("Select a function template:"))
+        
+        function_list = QListWidget()
+        for template in templates:
+            function_list.addItem(template["name"])
+            function_list.item(function_list.count() - 1).setData(Qt.UserRole, template["id"])
+        
+        layout.addWidget(function_list)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        if dialog.exec_() == QDialog.Accepted and function_list.currentItem():
+            function_id = function_list.currentItem().data(Qt.UserRole)
+            
+            selected_data = self.get_selected_data()
+            
+            self.sheet.execute_function(row, col, function_id, selected_data)
+            
+            self.model.dataChanged.emit(
+                self.model.index(row, col),
+                self.model.index(row, col)
+            )
+    
+    def modify_function(self):
+        """Modify a function at the current cell position."""
+        current_index = self.currentIndex()
+        if not current_index.isValid():
+            return
+            
+        row, col = current_index.row(), current_index.column()
+        cell = self.sheet.get_cell(row, col)
+        
+        if not hasattr(cell, "function_id") or not cell.function_id:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "No Function Found",
+                "This cell does not contain a function. Please select a cell with a function to modify."
+            )
+            return
+            
+        function_manager = FunctionManager()
+        function_template = function_manager.get_template(cell.function_id)
+        
+        if not function_template:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Function Not Found",
+                "The function associated with this cell could not be found."
+            )
+            return
+            
+        from PyQt5.QtWidgets import QDialog
+        dialog = FunctionEditorDialog(self, function_manager, function_template.id)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_data = self.get_selected_data()
+            self.sheet.execute_function(row, col, function_template.id, selected_data)
+            
+            self.model.dataChanged.emit(
+                self.model.index(row, col),
+                self.model.index(row, col)
+            )
+    
+    def manage_functions(self):
+        """Open the function template editor."""
+        dialog = FunctionEditorDialog(self, function_manager=FunctionManager())
+        dialog.exec_()
+    def get_selected_data(self):
+        """Extract data from selected cells."""
+        selected_ranges = self.selectedIndexes()
+        if not selected_ranges:
+            return None
+            
+        min_row = min(idx.row() for idx in selected_ranges)
+        max_row = max(idx.row() for idx in selected_ranges)
+        min_col = min(idx.column() for idx in selected_ranges)
+        max_col = max(idx.column() for idx in selected_ranges)
+        
+        data = []
+        for row in range(min_row, max_row + 1):
+            row_data = []
+            for col in range(min_col, max_col + 1):
+                cell = self.sheet.get_cell(row, col)
+                try:
+                    value = float(cell.value) if cell.value is not None else 0.0
+                except (ValueError, TypeError):
+                    value = 0.0  # Default for non-numeric values
+                row_data.append(value)
+            data.append(row_data)
+            
+        return data
+    def create_predefined_templates(self, function_manager):
+        """Create predefined function templates."""
+        sum_function_code = '''
+def sum_columns(data=None):
+    """Sum the values in the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        if len(df) == 1 or len(df.columns) == 1:
+            flat_data = df.values.flatten()
+            return float(np.sum(flat_data))
+        
+        return df.sum().tolist()
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+        
+        avg_function_code = '''
+def average_columns(data=None):
+    """Calculate the average of values in the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        if len(df) == 1 or len(df.columns) == 1:
+            flat_data = df.values.flatten()
+            return float(np.mean(flat_data))
+        
+        return df.mean().tolist()
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+        
+        benford_function_code = '''
+def benfords_law(data=None):
+    """Analyze first digits using Benford's Law."""
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import io, base64
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        flat_data = df.values.flatten()
+        
+        first_digits = []
+        for num in flat_data:
+            if num > 0:
+                str_num = str(abs(num)).strip('0.')
+                if str_num:
+                    first_digits.append(int(str_num[0]))
+        
+        if not first_digits:
+            return "No valid positive numbers found in selection"
+        
+        digit_counts = {}
+        for d in range(1, 10):  # Benford's Law applies to digits 1-9
+            digit_counts[d] = first_digits.count(d) / len(first_digits)
+        
+        benford_expected = {
+            1: 0.301, 2: 0.176, 3: 0.125, 4: 0.097, 
+            5: 0.079, 6: 0.067, 7: 0.058, 8: 0.051, 9: 0.046
+        }
+        
+        fig = Figure(figsize=(8, 6))
+        ax = fig.add_subplot(111)
+        
+        digits = list(range(1, 10))
+        observed = [digit_counts.get(d, 0) for d in digits]
+        expected = [benford_expected[d] for d in digits]
+        
+        x = np.arange(len(digits))
+        width = 0.35
+        
+        ax.bar(x - width/2, observed, width, label='Observed')
+        ax.bar(x + width/2, expected, width, label='Expected (Benford\\'s Law)')
+        
+        ax.set_xlabel('First Digit')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Benford\\'s Law Analysis')
+        ax.set_xticks(x)
+        ax.set_xticklabels(digits)
+        ax.legend()
+        
+        canvas = FigureCanvasAgg(fig)
+        buf = io.BytesIO()
+        canvas.print_png(buf)
+        data = base64.b64encode(buf.getbuffer()).decode("ascii")
+        
+        result = {
+            "image": f"data:image/png;base64,{data}",
+            "summary": {d: {"observed": digit_counts.get(d, 0), "expected": benford_expected[d]} for d in range(1, 10)}
+        }
+        
+        return result
+    except Exception as e:
+        return f"Error in Benford's analysis: {str(e)}"
+'''
+        
+        try:
+            function_manager.create_template("Sum Columns", sum_function_code, 
+                                           "Sums values in selected cells")
+            function_manager.create_template("Average Columns", avg_function_code, 
+                                           "Calculates average of values in selected cells")
+            function_manager.create_template("Benford's Law Analysis", benford_function_code, 
+                                           "Analyzes first digit frequencies using Benford's Law")
+            
+            function_manager.save_templates()
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Error", f"Failed to create predefined templates: {str(e)}")
