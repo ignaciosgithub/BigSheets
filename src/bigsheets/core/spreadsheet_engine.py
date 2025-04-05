@@ -469,6 +469,11 @@ class Sheet:
                     else:
                         if asyncio.iscoroutine(result_gen):
                             result = await result_gen
+                        elif hasattr(result_gen, '__iter__') and not isinstance(result_gen, (list, dict, str)):
+                            try:
+                                result = next(result_gen)
+                            except StopIteration:
+                                result = None
                         else:
                             result = result_gen
                         
