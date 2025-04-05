@@ -60,82 +60,91 @@ class BigSheetsApp(QMainWindow):
     
     def create_menu_bar(self):
         """Create the application menu bar."""
-        file_menu = self.menuBar().addMenu("&File")
-        
-        new_action = QAction("&New", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.new_workbook)
-        file_menu.addAction(new_action)
-        
-        open_action = QAction("&Open", self)
-        open_action.setShortcut("Ctrl+O")
-        open_action.triggered.connect(self.open_workbook)
-        file_menu.addAction(open_action)
-        
-        save_action = QAction("&Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_workbook)
-        file_menu.addAction(save_action)
-        
-        save_as_action = QAction("Save &As", self)
-        save_as_action.setShortcut("Ctrl+Shift+S")
-        save_as_action.triggered.connect(self.save_workbook_as)
-        file_menu.addAction(save_as_action)
-        
-        file_menu.addSeparator()
-        
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-        
-        edit_menu = self.menuBar().addMenu("&Edit")
-        
-        undo_action = QAction("&Undo", self)
-        undo_action.setShortcut("Ctrl+Z")
-        undo_action.triggered.connect(self.undo)
-        edit_menu.addAction(undo_action)
-        
-        redo_action = QAction("&Redo", self)
-        redo_action.setShortcut("Ctrl+Y")
-        redo_action.triggered.connect(self.redo)
-        edit_menu.addAction(redo_action)
-        
-        sheet_menu = self.menuBar().addMenu("&Sheet")
-        
-        add_sheet_action = QAction("&Add Sheet", self)
-        add_sheet_action.triggered.connect(self.add_sheet)
-        sheet_menu.addAction(add_sheet_action)
-        
-        rename_sheet_action = QAction("&Rename Sheet", self)
-        rename_sheet_action.triggered.connect(self.rename_sheet)
-        sheet_menu.addAction(rename_sheet_action)
-        
-        data_menu = self.menuBar().addMenu("&Data")
-        
-        import_csv_action = QAction("Import &CSV", self)
-        import_csv_action.triggered.connect(self.import_csv)
-        data_menu.addAction(import_csv_action)
-        
-        import_db_action = QAction("Import from &Database", self)
-        import_db_action.triggered.connect(self.import_database)
-        data_menu.addAction(import_db_action)
-        
-        insert_menu = self.menuBar().addMenu("&Insert")
-        
-        insert_chart_action = QAction("&Chart", self)
-        insert_chart_action.triggered.connect(self.insert_chart)
-        insert_menu.addAction(insert_chart_action)
-        
-        insert_image_action = QAction("&Image", self)
-        insert_image_action.triggered.connect(self.insert_image)
-        insert_menu.addAction(insert_image_action)
-        
-        functions_menu = self.menuBar().addMenu("&Functions")
-        
-        function_editor_action = QAction("&Function Editor", self)
-        function_editor_action.triggered.connect(self.open_function_editor)
-        functions_menu.addAction(function_editor_action)
+        try:
+            file_menu = self.menuBar().addMenu("&File")
+            
+            new_action = QAction("&New", self)
+            new_action.setShortcut("Ctrl+N")
+            new_action.triggered.connect(self.new_workbook)
+            file_menu.addAction(new_action)
+            
+            open_action = QAction("&Open", self)
+            open_action.setShortcut("Ctrl+O")
+            open_action.triggered.connect(self.open_workbook)
+            file_menu.addAction(open_action)
+            
+            save_action = QAction("&Save", self)
+            save_action.setShortcut("Ctrl+S")
+            save_action.triggered.connect(self.save_workbook)
+            file_menu.addAction(save_action)
+            
+            save_as_action = QAction("Save &As", self)
+            save_as_action.setShortcut("Ctrl+Shift+S")
+            save_as_action.triggered.connect(self.save_workbook_as)
+            file_menu.addAction(save_as_action)
+            
+            file_menu.addSeparator()
+            
+            exit_action = QAction("E&xit", self)
+            exit_action.setShortcut("Ctrl+Q")
+            exit_action.triggered.connect(self.close)
+            file_menu.addAction(exit_action)
+            
+            edit_menu = self.menuBar().addMenu("&Edit")
+            
+            undo_action = QAction("&Undo", self)
+            undo_action.setShortcut("Ctrl+Z")
+            undo_action.triggered.connect(self.undo)
+            edit_menu.addAction(undo_action)
+            
+            redo_action = QAction("&Redo", self)
+            redo_action.setShortcut("Ctrl+Y")
+            redo_action.triggered.connect(self.redo)
+            edit_menu.addAction(redo_action)
+            
+            sheet_menu = self.menuBar().addMenu("&Sheet")
+            
+            add_sheet_action = QAction("&Add Sheet", self)
+            add_sheet_action.triggered.connect(self.add_sheet)
+            sheet_menu.addAction(add_sheet_action)
+            
+            rename_sheet_action = QAction("&Rename Sheet", self)
+            rename_sheet_action.triggered.connect(self.rename_sheet)
+            sheet_menu.addAction(rename_sheet_action)
+            
+            data_menu = self.menuBar().addMenu("&Data")
+            
+            import_csv_action = QAction("Import &CSV", self)
+            import_csv_action.triggered.connect(self.import_csv)
+            data_menu.addAction(import_csv_action)
+            
+            import_db_action = QAction("Import from &Database", self)
+            import_db_action.triggered.connect(self.import_database)
+            data_menu.addAction(import_db_action)
+            
+            insert_menu = self.menuBar().addMenu("&Insert")
+            
+            insert_chart_action = QAction("&Chart", self)
+            insert_chart_action.triggered.connect(self.insert_chart)
+            insert_menu.addAction(insert_chart_action)
+            
+            insert_image_action = QAction("&Image", self)
+            insert_image_action.triggered.connect(self.insert_image)
+            insert_menu.addAction(insert_image_action)
+            
+            functions_menu = self.menuBar().addMenu("&Functions")
+            
+            function_editor_action = QAction("&Function Editor", self)
+            function_editor_action.triggered.connect(self.open_function_editor)
+            functions_menu.addAction(function_editor_action)
+            
+            self.menuBar().setVisible(True)
+            self.menuBar().update()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error creating menu bar: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to initialize menu bar: {str(e)}")
     
     def add_sheet_tab(self, sheet_name):
         """Add a new sheet tab to the tab widget."""
