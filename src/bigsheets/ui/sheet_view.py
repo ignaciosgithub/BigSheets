@@ -781,20 +781,33 @@ def persistent_sum_columns(data=None):
     """Sum the values in the selected columns. Updates automatically when source values change."""
     import pandas as pd
     import numpy as np
+    import time
+    import asyncio
     
     if data is None:
-        return "Error: No data selected"
+        yield "Error: No data selected"
+        return
     
-    try:
-        df = pd.DataFrame(data)
+    previous_data = None
+    
+    while True:
+        if data != previous_data:
+            previous_data = data.copy() if hasattr(data, "copy") else data
+            
+            try:
+                df = pd.DataFrame(data)
+                
+                if len(df) == 1 or len(df.columns) == 1:
+                    flat_data = df.values.flatten()
+                    result = float(np.sum(flat_data))
+                else:
+                    result = df.sum().tolist()
+                
+                yield result
+            except Exception as e:
+                yield f"Error: {str(e)}"
         
-        if len(df) == 1 or len(df.columns) == 1:
-            flat_data = df.values.flatten()
-            return float(np.sum(flat_data))
-        
-        return df.sum().tolist()
-    except Exception as e:
-        return f"Error: {str(e)}"
+        await asyncio.sleep(0.1)
 '''
             
             persistent_avg_function_code = '''
@@ -802,20 +815,33 @@ def persistent_average_columns(data=None):
     """Calculate the average of values in the selected columns. Updates automatically when source values change."""
     import pandas as pd
     import numpy as np
+    import time
+    import asyncio
     
     if data is None:
-        return "Error: No data selected"
+        yield "Error: No data selected"
+        return
     
-    try:
-        df = pd.DataFrame(data)
+    previous_data = None
+    
+    while True:
+        if data != previous_data:
+            previous_data = data.copy() if hasattr(data, "copy") else data
+            
+            try:
+                df = pd.DataFrame(data)
+                
+                if len(df) == 1 or len(df.columns) == 1:
+                    flat_data = df.values.flatten()
+                    result = float(np.mean(flat_data))
+                else:
+                    result = df.mean().tolist()
+                
+                yield result
+            except Exception as e:
+                yield f"Error: {str(e)}"
         
-        if len(df) == 1 or len(df.columns) == 1:
-            flat_data = df.values.flatten()
-            return float(np.mean(flat_data))
-        
-        return df.mean().tolist()
-    except Exception as e:
-        return f"Error: {str(e)}"
+        await asyncio.sleep(0.1)
 '''
 
             persistent_row_sum_function_code = '''
@@ -823,18 +849,27 @@ def persistent_row_sum(data=None):
     """Sum the values in each row of the selected columns. Updates automatically when source values change."""
     import pandas as pd
     import numpy as np
+    import time
+    import asyncio
     
     if data is None:
-        return "Error: No data selected"
+        yield "Error: No data selected"
+        return
     
-    try:
-        df = pd.DataFrame(data)
+    previous_data = None
+    
+    while True:
+        if data != previous_data:
+            previous_data = data.copy() if hasattr(data, "copy") else data
+            
+            try:
+                df = pd.DataFrame(data)
+                result = df.sum(axis=1).tolist()
+                yield result
+            except Exception as e:
+                yield f"Error: {str(e)}"
         
-        row_sums = df.sum(axis=1).tolist()
-        
-        return row_sums
-    except Exception as e:
-        return f"Error: {str(e)}"
+        await asyncio.sleep(0.1)
 '''
             
             persistent_row_avg_function_code = '''
@@ -842,18 +877,27 @@ def persistent_row_average(data=None):
     """Calculate the average of values in each row of the selected columns. Updates automatically when source values change."""
     import pandas as pd
     import numpy as np
+    import time
+    import asyncio
     
     if data is None:
-        return "Error: No data selected"
+        yield "Error: No data selected"
+        return
     
-    try:
-        df = pd.DataFrame(data)
+    previous_data = None
+    
+    while True:
+        if data != previous_data:
+            previous_data = data.copy() if hasattr(data, "copy") else data
+            
+            try:
+                df = pd.DataFrame(data)
+                result = df.mean(axis=1).tolist()
+                yield result
+            except Exception as e:
+                yield f"Error: {str(e)}"
         
-        row_avgs = df.mean(axis=1).tolist()
-        
-        return row_avgs
-    except Exception as e:
-        return f"Error: {str(e)}"
+        await asyncio.sleep(0.1)
 '''
 
             persistent_benford_function_code = '''
@@ -865,9 +909,18 @@ def persistent_benfords_law(data=None):
     import io, base64
     from matplotlib.figure import Figure
     from matplotlib.backends.backend_agg import FigureCanvasAgg
+    import time
+    import asyncio
     
     if data is None:
-        return "Error: No data selected"
+        yield "Error: No data selected"
+        return
+        
+    previous_data = None
+    
+    while True:
+        if data != previous_data:
+            previous_data = data.copy() if hasattr(data, "copy") else data
     
     try:
         df = pd.DataFrame(data)
@@ -928,15 +981,20 @@ def persistent_benfords_law(data=None):
 '''
             
             function_manager.create_template("Persistent Sum Columns", persistent_sum_function_code, 
-                                           "Sums values in selected cells and updates automatically when source values change")
+                                           "Sums values in selected cells and updates automatically when source values change",
+                                           is_persistent=True)
             function_manager.create_template("Persistent Average Columns", persistent_avg_function_code, 
-                                           "Calculates average of values in selected cells and updates automatically when source values change")
+                                           "Calculates average of values in selected cells and updates automatically when source values change",
+                                           is_persistent=True)
             function_manager.create_template("Persistent Row Sum", persistent_row_sum_function_code, 
-                                           "Sums values across each row of selected columns and updates automatically when source values change")
+                                           "Sums values across each row of selected columns and updates automatically when source values change",
+                                           is_persistent=True)
             function_manager.create_template("Persistent Row Average", persistent_row_avg_function_code, 
-                                           "Calculates average across each row of selected columns and updates automatically when source values change")
+                                           "Calculates average across each row of selected columns and updates automatically when source values change",
+                                           is_persistent=True)
             function_manager.create_template("Persistent Benford's Law Analysis", persistent_benford_function_code, 
-                                           "Analyzes first digit frequencies using Benford's Law and updates automatically when source values change")
+                                           "Analyzes first digit frequencies using Benford's Law and updates automatically when source values change",
+                                           is_persistent=True)
             
 
             function_manager.save_templates()

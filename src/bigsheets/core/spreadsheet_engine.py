@@ -487,7 +487,7 @@ class Sheet:
                 cell = self.sheet.get_cell(self.row, self.col)
                 
                 if hasattr(cell, 'target_cells') and cell.target_cells:
-                    for target_row, target_col in cell.target_cells:
+                    for target_row, target_col in list(cell.target_cells):  # Create a copy using list()
                         target_cell = self.sheet.get_cell(target_row, target_col)
                         target_cell.value = None
                         target_cell.function_result = None
