@@ -226,7 +226,7 @@ class SheetView(QTableView):
         menu.addSeparator()
         
         insert_function_action = QAction("Insert Function...", self)
-        insert_function_action.setShortcut("Ctrl+Shift+F")
+        insert_function_action.setShortcut("Ctrl+F")  # Update shortcut to match requirement
         insert_function_action.triggered.connect(self.insert_function)
         menu.addAction(insert_function_action)
         
@@ -481,6 +481,7 @@ class SheetView(QTableView):
         row, col = current_index.row(), current_index.column()
         
         function_manager = FunctionManager()
+        function_manager.load_templates()  # Explicitly load templates
         templates = function_manager.list_templates()
         
         if not any(t.get("name") == "Sum Columns" for t in templates):
@@ -577,7 +578,9 @@ class SheetView(QTableView):
     
     def manage_functions(self):
         """Open the function template editor."""
-        dialog = FunctionEditorDialog(self, function_manager=FunctionManager())
+        function_manager = FunctionManager()
+        function_manager.load_templates()  # Explicitly load templates
+        dialog = FunctionEditorDialog(self, function_manager=function_manager)
         dialog.exec_()
     def get_selected_data(self):
         """Extract data from selected cells."""
@@ -596,7 +599,10 @@ class SheetView(QTableView):
             for col in range(min_col, max_col + 1):
                 cell = self.sheet.get_cell(row, col)
                 try:
-                    value = float(cell.value) if cell.value is not None else 0.0
+                    if isinstance(cell.value, list):
+                        value = cell.value  # Keep lists intact
+                    else:
+                        value = float(cell.value) if cell.value is not None else 0.0
                 except (ValueError, TypeError):
                     value = 0.0  # Default for non-numeric values
                 row_data.append(value)
@@ -726,6 +732,213 @@ def benfords_law(data=None):
             function_manager.create_template("Benford's Law Analysis", benford_function_code, 
                                            "Analyzes first digit frequencies using Benford's Law")
             
+            row_sum_function_code = '''
+def row_sum(data=None):
+    """Sum the values in each row of the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        row_sums = df.sum(axis=1).tolist()
+        
+        return row_sums
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+            
+            row_avg_function_code = '''
+def row_average(data=None):
+    """Calculate the average of values in each row of the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        row_avgs = df.mean(axis=1).tolist()
+        
+        return row_avgs
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+            
+            function_manager.create_template("Row Sum", row_sum_function_code, 
+                                           "Sums values across each row of selected columns")
+            function_manager.create_template("Row Average", row_avg_function_code, 
+                                           "Calculates average across each row of selected columns")
+            
+
+            persistent_sum_function_code = '''
+def persistent_sum_columns(data=None):
+    """Sum the values in the selected columns. Updates automatically when source values change."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        if len(df) == 1 or len(df.columns) == 1:
+            flat_data = df.values.flatten()
+            return float(np.sum(flat_data))
+        
+        return df.sum().tolist()
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+            
+            persistent_avg_function_code = '''
+def persistent_average_columns(data=None):
+    """Calculate the average of values in the selected columns. Updates automatically when source values change."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        if len(df) == 1 or len(df.columns) == 1:
+            flat_data = df.values.flatten()
+            return float(np.mean(flat_data))
+        
+        return df.mean().tolist()
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+
+            persistent_row_sum_function_code = '''
+def persistent_row_sum(data=None):
+    """Sum the values in each row of the selected columns. Updates automatically when source values change."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        row_sums = df.sum(axis=1).tolist()
+        
+        return row_sums
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+            
+            persistent_row_avg_function_code = '''
+def persistent_row_average(data=None):
+    """Calculate the average of values in each row of the selected columns. Updates automatically when source values change."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        row_avgs = df.mean(axis=1).tolist()
+        
+        return row_avgs
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+
+            persistent_benford_function_code = '''
+def persistent_benfords_law(data=None):
+    """Analyze first digits using Benford's Law. Updates automatically when source values change."""
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import io, base64
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        flat_data = df.values.flatten()
+        
+        first_digits = []
+        for num in flat_data:
+            if num > 0:
+                str_num = str(abs(num)).strip('0.')
+                if str_num:
+                    first_digits.append(int(str_num[0]))
+        
+        if not first_digits:
+            return "No valid positive numbers found in selection"
+        
+        digit_counts = {}
+        for d in range(1, 10):  # Benford's Law applies to digits 1-9
+            digit_counts[d] = first_digits.count(d) / len(first_digits)
+        
+        benford_expected = {
+            1: 0.301, 2: 0.176, 3: 0.125, 4: 0.097, 
+            5: 0.079, 6: 0.067, 7: 0.058, 8: 0.051, 9: 0.046
+        }
+        
+        fig = Figure(figsize=(8, 6))
+        ax = fig.add_subplot(111)
+        
+        digits = list(range(1, 10))
+        observed = [digit_counts.get(d, 0) for d in digits]
+        expected = [benford_expected[d] for d in digits]
+        
+        x = np.arange(len(digits))
+        width = 0.35
+        
+        ax.bar(x - width/2, observed, width, label='Observed')
+        ax.bar(x + width/2, expected, width, label='Expected (Benford\\'s Law)')
+        
+        ax.set_xlabel('First Digit')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Benford\\'s Law Analysis')
+        ax.set_xticks(x)
+        ax.set_xticklabels(digits)
+        ax.legend()
+        
+        canvas = FigureCanvasAgg(fig)
+        buf = io.BytesIO()
+        canvas.print_png(buf)
+        data = base64.b64encode(buf.getbuffer()).decode("ascii")
+        
+        result = {
+            "image": f"data:image/png;base64,{data}",
+            "summary": {d: {"observed": digit_counts.get(d, 0), "expected": benford_expected[d]} for d in range(1, 10)}
+        }
+        
+        return result
+    except Exception as e:
+        return f"Error in Benford's analysis: {str(e)}"
+'''
+            
+            function_manager.create_template("Persistent Sum Columns", persistent_sum_function_code, 
+                                           "Sums values in selected cells and updates automatically when source values change")
+            function_manager.create_template("Persistent Average Columns", persistent_avg_function_code, 
+                                           "Calculates average of values in selected cells and updates automatically when source values change")
+            function_manager.create_template("Persistent Row Sum", persistent_row_sum_function_code, 
+                                           "Sums values across each row of selected columns and updates automatically when source values change")
+            function_manager.create_template("Persistent Row Average", persistent_row_avg_function_code, 
+                                           "Calculates average across each row of selected columns and updates automatically when source values change")
+            function_manager.create_template("Persistent Benford's Law Analysis", persistent_benford_function_code, 
+                                           "Analyzes first digit frequencies using Benford's Law and updates automatically when source values change")
+            
+
             function_manager.save_templates()
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox

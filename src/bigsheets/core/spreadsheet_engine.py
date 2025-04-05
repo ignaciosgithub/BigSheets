@@ -18,14 +18,18 @@ class Cell:
     """
     Represents a single cell in a spreadsheet with content, formatting, and formula support.
     """
-    def __init__(self, value: Any = None, formula: str = None):
+    def __init__(self, value: Any = None, formula: Optional[str] = None):
         self.value = value
         self.formula = formula
         self.formatting = {}
-        self.dependencies = set()
-        self.dependents = set()
-        self.function_id = None  # Store reference to function template
+        self.dependencies = set()  # Cells that this cell depends on for its value
+        self.dependents = set()    # Cells that depend on this cell's value
+        self.function_id = None    # Store reference to function template
         self.function_result = None  # Store the result of function execution
+        self.source_cells = []     # Store source cell ranges for persistent functions
+        self.target_cells = []     # Store target cells for multi-cell output
+        self.image = None          # Store image data
+        self.chart = None          # Store chart data
     
     def __repr__(self) -> str:
         if self.formula:
@@ -62,6 +66,8 @@ class Sheet:
             cell = self.get_cell(row, col)
             cell.value = value
             cell.formula = formula
+            
+            self._update_dependent_cells(row, col)
         
         command = CellEditCommand(
             sheet_id=self.name,
@@ -83,6 +89,41 @@ class Sheet:
     def redo(self) -> bool:
         """Redo the last undone command in this sheet."""
         return self.command_manager.redo(self.name)
+        
+    def _update_dependent_cells(self, row: int, col: int) -> None:
+        """Update all cells that depend on the specified cell."""
+        cell = self.get_cell(row, col)
+        
+        for dependent_row, dependent_col in cell.dependents:
+            dependent_cell = self.get_cell(dependent_row, dependent_col)
+            
+            if dependent_cell.function_id is not None:
+                if hasattr(dependent_cell, 'target_cells') and dependent_cell.target_cells:
+                    for target_row, target_col in dependent_cell.target_cells:
+                        target_cell = self.get_cell(target_row, target_col)
+                        target_cell.value = None
+                        target_cell.function_result = None
+                
+                if hasattr(dependent_cell, 'source_cells') and dependent_cell.source_cells:
+                    selected_data = []
+                    for src_row_range, src_col_range in dependent_cell.source_cells:
+                        data = []
+                        for r in range(src_row_range[0], src_row_range[1] + 1):
+                            row_data = []
+                            for c in range(src_col_range[0], src_col_range[1] + 1):
+                                src_cell = self.get_cell(r, c)
+                                try:
+                                    if isinstance(src_cell.value, list):
+                                        value = src_cell.value  # Keep lists intact
+                                    else:
+                                        value = float(src_cell.value) if src_cell.value is not None else 0.0
+                                except (ValueError, TypeError):
+                                    value = 0.0
+                                row_data.append(value)
+                            data.append(row_data)
+                        selected_data.append(data)
+                    
+                    self.execute_function(dependent_row, dependent_col, dependent_cell.function_id, selected_data)
         
     def insert_row(self, row: int) -> None:
         """Insert a row at the specified position."""
@@ -335,15 +376,59 @@ class Sheet:
                 self.old_function_id = old_function_id
                 self.old_result = old_result
                 self.selected_data = selected_data
+                self.persistent = True  # Default to persistent functions
+                self.multi_cell_result = False  # Flag for functions that output to multiple cells
+                self.target_cells = []  # Store target cells for multi-cell output
                 
             def execute(self):
                 cell = self.sheet.get_cell(self.row, self.col)
                 cell.function_id = self.function_id
                 
+                for dep_row, dep_col in list(cell.dependencies):
+                    dep_cell = self.sheet.get_cell(dep_row, dep_col)
+                    if (self.row, self.col) in dep_cell.dependents:
+                        dep_cell.dependents.remove((self.row, self.col))
+                cell.dependencies.clear()
+                
+                if hasattr(cell, 'target_cells'):
+                    for target_row, target_col in cell.target_cells:
+                        target_cell = self.sheet.get_cell(target_row, target_col)
+                        target_cell.value = None
+                        target_cell.function_result = None
+                cell.target_cells = []
+                
+                if self.persistent and self.selected_data is not None:
+                    cell.source_cells = []
+                    min_row = min_col = float('inf')
+                    max_row = max_col = -float('inf')
+                    
+                    for r_idx, row_data in enumerate(self.selected_data):
+                        for c_idx, _ in enumerate(row_data):
+                            min_row = min(min_row, r_idx)
+                            max_row = max(max_row, r_idx)
+                            min_col = min(min_col, c_idx)
+                            max_col = max(max_col, c_idx)
+                    
+                    row_range = (int(min_row), int(max_row))
+                    col_range = (int(min_col), int(max_col))
+                    cell.source_cells.append((row_range, col_range))
+                    
+                    for r in range(int(min_row), int(max_row) + 1):
+                        for c in range(int(min_col), int(max_col) + 1):
+                            source_cell = self.sheet.get_cell(r, c)
+                            source_cell.dependents.add((self.row, self.col))
+                            cell.dependencies.add((r, c))
+                
                 cell.function_result = "Calculating..."
                 cell.value = "Calculating..."
                 
-                asyncio.create_task(self._execute_function_async())
+                try:
+                    loop = asyncio.get_running_loop()
+                    asyncio.create_task(self._execute_function_async())
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(self._execute_function_async())
                 
             async def _execute_function_async(self):
                 try:
@@ -355,8 +440,52 @@ class Sheet:
                     else:
                         result = await function_manager.execute_function(self.function_id)
                     
-                    cell.function_result = result
-                    cell.value = result
+                    if isinstance(result, list) and "_row_" in self.function_id.lower():
+                        cell.function_result = "Multi-cell output"
+                        cell.value = "See adjacent cells →"
+                        cell.target_cells = []
+                        
+                        for i, val in enumerate(result):
+                            target_row = self.row
+                            target_col = self.col + i + 1
+                            target_cell = self.sheet.get_cell(target_row, target_col)
+                            
+                            if target_cell.value is not None and not hasattr(target_cell, 'function_id'):
+                                continue
+                                
+                            target_cell.value = val
+                            target_cell.function_result = val
+                            cell.target_cells.append((target_row, target_col))
+                            
+                            self.sheet.model.dataChanged.emit(
+                                self.sheet.model.index(target_row, target_col),
+                                self.sheet.model.index(target_row, target_col)
+                            )
+                    
+                    elif isinstance(result, list) and not any(isinstance(x, list) for x in result):
+                        cell.function_result = "Multi-cell output"
+                        cell.value = "See cells below ↓"
+                        cell.target_cells = []
+                        
+                        for i, val in enumerate(result):
+                            target_row = self.row + i + 1
+                            target_col = self.col
+                            target_cell = self.sheet.get_cell(target_row, target_col)
+                            
+                            if target_cell.value is not None and not hasattr(target_cell, 'function_id'):
+                                continue
+                                
+                            target_cell.value = val
+                            target_cell.function_result = val
+                            cell.target_cells.append((target_row, target_col))
+                            
+                            self.sheet.model.dataChanged.emit(
+                                self.sheet.model.index(target_row, target_col),
+                                self.sheet.model.index(target_row, target_col)
+                            )
+                    else:
+                        cell.function_result = result
+                        cell.value = result
                 except Exception as e:
                     cell.function_result = f"Error: {str(e)}"
                     cell.value = f"Error: {str(e)}"
