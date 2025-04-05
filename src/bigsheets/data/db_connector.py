@@ -4,7 +4,7 @@ Database Connector Module
 This module provides connectivity to various SQL and NoSQL databases.
 """
 
-from typing import Dict, List, Any, Optional, Union, Tuple
+from typing import Dict, List, Any, Optional, Union, Tuple, Iterator
 import sqlalchemy
 from sqlalchemy import create_engine, text
 import pandas as pd
@@ -19,16 +19,19 @@ class DatabaseConnector:
         """Initialize the database connector."""
         self.connections = {}  # Store active connections
         
-    def connect_and_query(self, connection_string: str, query: str = None) -> List[List[Any]]:
+    def connect_and_query(self, connection_string: str, query: str = None, 
+                        streaming: bool = False, chunk_size: int = 1000) -> Union[List[List[Any]], Iterator[List[Any]]]:
         """
         Connect to a database and execute a query.
         
         Args:
             connection_string: SQLAlchemy connection string
             query: SQL query to execute (optional)
+            streaming: Whether to return a streaming iterator instead of loading all data at once
+            chunk_size: Number of rows to fetch at a time when streaming
             
         Returns:
-            List of lists containing the query results
+            Either a list of lists containing all query results, or an iterator yielding chunks of results
         """
         connection_id = f"conn_{len(self.connections) + 1}"
         
@@ -43,21 +46,72 @@ class DatabaseConnector:
                 first_table = tables[0]
                 query = f"SELECT * FROM {first_table} LIMIT 100"
             
-            df = self.execute_query(connection_id, query)
-            
-            data = df.values.tolist()
-            
-            if not df.empty:
-                data.insert(0, df.columns.tolist())
-            
-            self.close_connection(connection_id)
-            
-            return data
+            if streaming:
+                return self.stream_query(connection_id, query, chunk_size=chunk_size)
+            else:
+                df = self.execute_query(connection_id, query)
+                
+                data = df.values.tolist()
+                
+                if not df.empty:
+                    data.insert(0, df.columns.tolist())
+                
+                self.close_connection(connection_id)
+                
+                return data
         except Exception as e:
             if connection_id in self.connections:
                 self.close_connection(connection_id)
             
             return [[f"Error: {str(e)}"]]
+            
+    def stream_query(self, connection_id: str, query: str, 
+                    params: Optional[Dict[str, Any]] = None,
+                    chunk_size: int = 1000):
+        """
+        Execute a SQL query and return a generator that yields chunks of results.
+        This allows processing large datasets without loading everything into memory.
+        
+        Args:
+            connection_id: Identifier for the connection to use
+            query: SQL query to execute
+            params: Parameters to bind to the query
+            chunk_size: Number of rows to fetch at a time
+            
+        Yields:
+            Lists of rows, with each list containing up to chunk_size rows
+        """
+        if connection_id not in self.connections:
+            raise ValueError(f"Connection '{connection_id}' does not exist")
+        
+        engine = self.connections[connection_id]
+        connection = None
+        
+        try:
+            connection = engine.connect()
+            connection = connection.execution_options(stream_results=True)
+            
+            if params:
+                result = connection.execute(text(query), params)
+            else:
+                result = connection.execute(text(query))
+            
+            columns = result.keys()
+            
+            yield columns
+            
+            while True:
+                chunk = result.fetchmany(chunk_size)
+                if not chunk:
+                    break
+                
+                yield chunk
+                
+        except Exception as e:
+            raise RuntimeError(f"Error streaming query: {str(e)}")
+        finally:
+            if connection:
+                connection.close()
     
     def create_connection(self, connection_id: str, connection_string: str) -> None:
         """
@@ -85,7 +139,8 @@ class DatabaseConnector:
             del self.connections[connection_id]
     
     def execute_query(self, connection_id: str, query: str, 
-                     params: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+                     params: Optional[Dict[str, Any]] = None,
+                     chunk_size: int = 1000) -> pd.DataFrame:
         """
         Execute a SQL query and return the results as a DataFrame.
         
@@ -93,6 +148,7 @@ class DatabaseConnector:
             connection_id: Identifier for the connection to use
             query: SQL query to execute
             params: Parameters to bind to the query
+            chunk_size: Number of rows to fetch at a time (for streaming)
             
         Returns:
             DataFrame containing the query results
@@ -105,13 +161,21 @@ class DatabaseConnector:
         try:
             with engine.connect() as conn:
                 if params:
-                    result = conn.execute(text(query), params)
+                    result = conn.execution_options(stream_results=True).execute(text(query), params)
                 else:
-                    result = conn.execute(text(query))
+                    result = conn.execution_options(stream_results=True).execute(text(query))
                 
-                df = pd.DataFrame(result.fetchall())
-                if df.shape[0] > 0:
-                    df.columns = result.keys()
+                columns = result.keys()
+                
+                df = pd.DataFrame(columns=columns)
+                
+                while True:
+                    chunk = result.fetchmany(chunk_size)
+                    if not chunk:
+                        break
+                    
+                    chunk_df = pd.DataFrame(chunk, columns=columns)
+                    df = pd.concat([df, chunk_df], ignore_index=True)
                 
                 return df
         except Exception as e:
