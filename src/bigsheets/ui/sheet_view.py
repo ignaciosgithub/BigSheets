@@ -226,6 +226,7 @@ class SheetView(QTableView):
         menu.addSeparator()
         
         insert_function_action = QAction("Insert Function...", self)
+        insert_function_action.setShortcut("Ctrl+Shift+F")
         insert_function_action.triggered.connect(self.insert_function)
         menu.addAction(insert_function_action)
         
@@ -478,6 +479,10 @@ class SheetView(QTableView):
         function_manager = FunctionManager()
         templates = function_manager.list_templates()
         
+        if not any(t.get("name") == "Sum Columns" for t in templates):
+            self.create_predefined_templates(function_manager)
+            templates = function_manager.list_templates()
+        
         if not templates:
             from PyQt5.QtWidgets import QMessageBox
             result = QMessageBox.question(
@@ -516,7 +521,9 @@ class SheetView(QTableView):
         if dialog.exec_() == QDialog.Accepted and function_list.currentItem():
             function_id = function_list.currentItem().data(Qt.UserRole)
             
-            self.sheet.execute_function(row, col, function_id)
+            selected_data = self.get_selected_data()
+            
+            self.sheet.execute_function(row, col, function_id, selected_data)
             
             self.model.dataChanged.emit(
                 self.model.index(row, col),
@@ -527,3 +534,154 @@ class SheetView(QTableView):
         """Open the function template editor."""
         dialog = FunctionEditorDialog(self, function_manager=FunctionManager())
         dialog.exec_()
+    def get_selected_data(self):
+        """Extract data from selected cells."""
+        selected_ranges = self.selectedIndexes()
+        if not selected_ranges:
+            return None
+            
+        min_row = min(idx.row() for idx in selected_ranges)
+        max_row = max(idx.row() for idx in selected_ranges)
+        min_col = min(idx.column() for idx in selected_ranges)
+        max_col = max(idx.column() for idx in selected_ranges)
+        
+        data = []
+        for row in range(min_row, max_row + 1):
+            row_data = []
+            for col in range(min_col, max_col + 1):
+                cell = self.sheet.get_cell(row, col)
+                try:
+                    value = float(cell.value) if cell.value is not None else 0.0
+                except (ValueError, TypeError):
+                    value = 0.0  # Default for non-numeric values
+                row_data.append(value)
+            data.append(row_data)
+            
+        return data
+    def create_predefined_templates(self, function_manager):
+        """Create predefined function templates."""
+        sum_function_code = '''
+def sum_columns(data=None):
+    """Sum the values in the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        if len(df) == 1 or len(df.columns) == 1:
+            flat_data = df.values.flatten()
+            return float(np.sum(flat_data))
+        
+        return df.sum().tolist()
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+        
+        avg_function_code = '''
+def average_columns(data=None):
+    """Calculate the average of values in the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        if len(df) == 1 or len(df.columns) == 1:
+            flat_data = df.values.flatten()
+            return float(np.mean(flat_data))
+        
+        return df.mean().tolist()
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+        
+        benford_function_code = '''
+def benfords_law(data=None):
+    """Analyze first digits using Benford's Law."""
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import io, base64
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        flat_data = df.values.flatten()
+        
+        first_digits = []
+        for num in flat_data:
+            if num > 0:
+                str_num = str(abs(num)).strip('0.')
+                if str_num:
+                    first_digits.append(int(str_num[0]))
+        
+        if not first_digits:
+            return "No valid positive numbers found in selection"
+        
+        digit_counts = {}
+        for d in range(1, 10):  # Benford's Law applies to digits 1-9
+            digit_counts[d] = first_digits.count(d) / len(first_digits)
+        
+        benford_expected = {
+            1: 0.301, 2: 0.176, 3: 0.125, 4: 0.097, 
+            5: 0.079, 6: 0.067, 7: 0.058, 8: 0.051, 9: 0.046
+        }
+        
+        fig = Figure(figsize=(8, 6))
+        ax = fig.add_subplot(111)
+        
+        digits = list(range(1, 10))
+        observed = [digit_counts.get(d, 0) for d in digits]
+        expected = [benford_expected[d] for d in digits]
+        
+        x = np.arange(len(digits))
+        width = 0.35
+        
+        ax.bar(x - width/2, observed, width, label='Observed')
+        ax.bar(x + width/2, expected, width, label='Expected (Benford\\'s Law)')
+        
+        ax.set_xlabel('First Digit')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Benford\\'s Law Analysis')
+        ax.set_xticks(x)
+        ax.set_xticklabels(digits)
+        ax.legend()
+        
+        canvas = FigureCanvasAgg(fig)
+        buf = io.BytesIO()
+        canvas.print_png(buf)
+        data = base64.b64encode(buf.getbuffer()).decode("ascii")
+        
+        result = {
+            "image": f"data:image/png;base64,{data}",
+            "summary": {d: {"observed": digit_counts.get(d, 0), "expected": benford_expected[d]} for d in range(1, 10)}
+        }
+        
+        return result
+    except Exception as e:
+        return f"Error in Benford's analysis: {str(e)}"
+'''
+        
+        try:
+            function_manager.create_template("Sum Columns", sum_function_code, 
+                                           "Sums values in selected cells")
+            function_manager.create_template("Average Columns", avg_function_code, 
+                                           "Calculates average of values in selected cells")
+            function_manager.create_template("Benford's Law Analysis", benford_function_code, 
+                                           "Analyzes first digit frequencies using Benford's Law")
+            
+            function_manager.save_templates()
+        except Exception as e:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Error", f"Failed to create predefined templates: {str(e)}")

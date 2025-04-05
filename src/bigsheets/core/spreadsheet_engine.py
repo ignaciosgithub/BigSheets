@@ -310,7 +310,7 @@ class Sheet:
         command = AddImageCommand(self, row, col, image_data, old_image)
         self.command_manager.execute_command(self.name, command)
         
-    def execute_function(self, row: int, col: int, function_id: str) -> None:
+    def execute_function(self, row: int, col: int, function_id: str, selected_data=None) -> None:
         """
         Assign a function to a cell and execute it.
         
@@ -318,6 +318,7 @@ class Sheet:
             row: Row index
             col: Column index
             function_id: ID of the function template to execute
+            selected_data: Optional data from selected cells
         """
         from bigsheets.function_engine.function_manager import FunctionManager
         
@@ -326,13 +327,14 @@ class Sheet:
         old_result = cell.function_result
         
         class ExecuteFunctionCommand(Command):
-            def __init__(self, sheet, row, col, function_id, old_function_id, old_result):
+            def __init__(self, sheet, row, col, function_id, old_function_id, old_result, selected_data):
                 self.sheet = sheet
                 self.row = row
                 self.col = col
                 self.function_id = function_id
                 self.old_function_id = old_function_id
                 self.old_result = old_result
+                self.selected_data = selected_data
                 
             def execute(self):
                 cell = self.sheet.get_cell(self.row, self.col)
@@ -348,7 +350,10 @@ class Sheet:
                     cell = self.sheet.get_cell(self.row, self.col)
                     function_manager = FunctionManager()
                     
-                    result = await function_manager.execute_function(self.function_id)
+                    if self.selected_data is not None:
+                        result = await function_manager.execute_function(self.function_id, self.selected_data)
+                    else:
+                        result = await function_manager.execute_function(self.function_id)
                     
                     cell.function_result = result
                     cell.value = result
@@ -365,7 +370,7 @@ class Sheet:
             def redo(self):
                 self.execute()
         
-        command = ExecuteFunctionCommand(self, row, col, function_id, old_function_id, old_result)
+        command = ExecuteFunctionCommand(self, row, col, function_id, old_function_id, old_result, selected_data)
         self.command_manager.execute_command(self.name, command)
 
 
