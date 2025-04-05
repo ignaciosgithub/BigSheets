@@ -434,32 +434,108 @@ class Sheet:
                     loop.run_until_complete(self._execute_function_async())
                 
             async def _execute_function_async(self):
+                """Execute the function and update the cell value."""
+                cell = self.sheet.get_cell(self.row, self.col)
+                
                 try:
-                    cell = self.sheet.get_cell(self.row, self.col)
                     function_manager = FunctionManager()
+                    template = function_manager.get_template(self.function_id)
+                    
+                    if not template:
+                        cell.value = "Error: Template not found"
+                        cell.function_result = None
+                        return
                     
                     if self.selected_data is not None:
-                        result = await function_manager.execute_function(self.function_id, self.selected_data)
+                        result_gen = template.execute(self.selected_data)
                     else:
-                        result = await function_manager.execute_function(self.function_id)
+                        result_gen = template.execute()
                     
-                    if isinstance(result, list) and "_row_" in self.function_id.lower():
+                    if template.is_persistent and hasattr(result_gen, '__aiter__'):
+                        async def update_task():
+                            try:
+                                async for result in result_gen:
+                                    self._update_cell_with_result(result)
+                                    if hasattr(self.sheet, 'model'):
+                                        self.sheet.model.dataChanged.emit(
+                                            self.sheet.model.index(self.row, self.col),
+                                            self.sheet.model.index(self.row, self.col)
+                                        )
+                            except Exception as e:
+                                cell.value = f"Error in update task: {str(e)}"
+                                cell.function_result = None
+                        
+                        self.update_task = asyncio.create_task(update_task())
+                    else:
+                        if asyncio.iscoroutine(result_gen):
+                            result = await result_gen
+                        else:
+                            result = result_gen
+                        
+                        self._update_cell_with_result(result)
+                except Exception as e:
+                    cell.value = f"Error: {str(e)}"
+                    cell.function_result = None
+                    
+            def _update_cell_with_result(self, result):
+                """Update the cell with the function result."""
+                cell = self.sheet.get_cell(self.row, self.col)
+                
+                if hasattr(cell, 'target_cells') and cell.target_cells:
+                    for target_row, target_col in cell.target_cells:
+                        target_cell = self.sheet.get_cell(target_row, target_col)
+                        target_cell.value = None
+                        target_cell.function_result = None
+                    
+                    cell.target_cells = []
+                
+                if result is None:
+                    cell.value = ""
+                    cell.function_result = None
+                else:
+                    cell.function_result = result
+                    
+                    if isinstance(result, dict) and "image" in result:
+                        cell.value = "Image"
+                        
+                    elif isinstance(result, list) and any(isinstance(x, list) for x in result):
+                        cell.function_result = "Multi-cell output"
+                        cell.value = "See cells below and right →↓"
+                        
+                        if not hasattr(cell, 'target_cells'):
+                            cell.target_cells = []
+                        
+                        for i, row_data in enumerate(result):
+                            for j, val in enumerate(row_data):
+                                if i == 0 and j == 0:
+                                    continue  # Skip the current cell
+                                    
+                                target_row = self.row + i
+                                target_col = self.col + j
+                                
+                                target_cell = self.sheet.get_cell(target_row, target_col)
+                                target_cell.value = val
+                                target_cell.function_result = val
+                                
+                                cell.target_cells.append((target_row, target_col))
+                                
+                                if hasattr(self.sheet, 'model'):
+                                    self.sheet.model.dataChanged.emit(
+                                        self.sheet.model.index(target_row, target_col),
+                                        self.sheet.model.index(target_row, target_col)
+                                    )
+                        
+                    elif isinstance(result, list) and "_row_" in self.function_id.lower():
                         cell.function_result = "Multi-cell output"
                         cell.value = "See adjacent cells →"
                         
-                        if not hasattr(cell, 'target_cells') or cell.target_cells is None:
+                        if not hasattr(cell, 'target_cells'):
                             cell.target_cells = []
-                        
-                        for target_row, target_col in cell.target_cells:
-                            target_cell = self.sheet.get_cell(target_row, target_col)
-                            target_cell.value = None
-                            target_cell.function_result = None
-                        
-                        cell.target_cells = []  # Start fresh after clearing
                         
                         for i, val in enumerate(result):
                             target_row = self.row
                             target_col = self.col + i + 1
+                            
                             target_cell = self.sheet.get_cell(target_row, target_col)
                             
                             if target_cell.value is not None and not hasattr(target_cell, 'function_id'):
@@ -469,28 +545,23 @@ class Sheet:
                             target_cell.function_result = val
                             cell.target_cells.append((target_row, target_col))
                             
-                            self.sheet.model.dataChanged.emit(
-                                self.sheet.model.index(target_row, target_col),
-                                self.sheet.model.index(target_row, target_col)
-                            )
-                    
-                    elif isinstance(result, list) and not any(isinstance(x, list) for x in result):
+                            if hasattr(self.sheet, 'model'):
+                                self.sheet.model.dataChanged.emit(
+                                    self.sheet.model.index(target_row, target_col),
+                                    self.sheet.model.index(target_row, target_col)
+                                )
+                        
+                    elif isinstance(result, list):
                         cell.function_result = "Multi-cell output"
                         cell.value = "See cells below ↓"
                         
-                        if not hasattr(cell, 'target_cells') or cell.target_cells is None:
+                        if not hasattr(cell, 'target_cells'):
                             cell.target_cells = []
-                        
-                        for target_row, target_col in cell.target_cells:
-                            target_cell = self.sheet.get_cell(target_row, target_col)
-                            target_cell.value = None
-                            target_cell.function_result = None
-                        
-                        cell.target_cells = []  # Start fresh after clearing
                         
                         for i, val in enumerate(result):
                             target_row = self.row + i + 1
                             target_col = self.col
+                            
                             target_cell = self.sheet.get_cell(target_row, target_col)
                             
                             if target_cell.value is not None and not hasattr(target_cell, 'function_id'):
@@ -500,16 +571,13 @@ class Sheet:
                             target_cell.function_result = val
                             cell.target_cells.append((target_row, target_col))
                             
-                            self.sheet.model.dataChanged.emit(
-                                self.sheet.model.index(target_row, target_col),
-                                self.sheet.model.index(target_row, target_col)
-                            )
+                            if hasattr(self.sheet, 'model'):
+                                self.sheet.model.dataChanged.emit(
+                                    self.sheet.model.index(target_row, target_col),
+                                    self.sheet.model.index(target_row, target_col)
+                                )
                     else:
-                        cell.function_result = result
                         cell.value = result
-                except Exception as e:
-                    cell.function_result = f"Error: {str(e)}"
-                    cell.value = f"Error: {str(e)}"
                 
             def undo(self):
                 cell = self.sheet.get_cell(self.row, self.col)

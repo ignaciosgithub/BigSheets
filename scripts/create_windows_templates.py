@@ -215,6 +215,49 @@ def round_function(data, decimals=0):
     }
 ]
 
+def convert_to_persistent_code(code):
+    """Convert standard template code to persistent template code with while loops."""
+    lines = code.strip().split('\n')
+    
+    function_def_line = lines[0]
+    
+    import_lines = [line for line in lines[1:] if line.strip().startswith('import ')]
+    
+    core_logic_lines = []
+    return_lines = []
+    
+    for line in lines[1:]:
+        if line.strip().startswith('return '):
+            return_lines.append(line.replace('return ', ''))
+        elif not line.strip().startswith('import ') and line.strip():
+            core_logic_lines.append(line)
+    
+    new_code = function_def_line + '\n'
+    
+    for imp in import_lines:
+        new_code += '    ' + imp + '\n'
+    
+    new_code += '    import time\n'
+    new_code += '    import asyncio\n\n'
+    new_code += '    # Initial state\n'
+    new_code += '    previous_data = None\n\n'
+    new_code += '    # Continuous monitoring loop\n'
+    new_code += '    while True:\n'
+    new_code += '        # Only process if data has changed\n'
+    new_code += '        if data != previous_data:\n'
+    new_code += '            previous_data = data.copy() if isinstance(data, pd.DataFrame) else data\n\n'
+    
+    for line in core_logic_lines:
+        new_code += '            ' + line + '\n'
+    
+    for ret in return_lines:
+        new_code += '            yield ' + ret + '\n'
+    
+    new_code += '        # Brief pause to prevent CPU hogging\n'
+    new_code += '        time.sleep(0.1)\n'
+    
+    return new_code
+
 def create_template_json():
     """Create template JSON files for Windows."""
     os.makedirs(WINDOWS_PATH, exist_ok=True)
@@ -247,10 +290,12 @@ def create_template_json():
             persistent_name = f"Persistent {template_name}"
             persistent_description = f"{template_info['description']}. Updates automatically when source values change."
             
+            persistent_code = convert_to_persistent_code(template_info["code"])
+            
             persistent_data = {
                 "id": persistent_id,
                 "name": persistent_name,
-                "code": template_info["code"],
+                "code": persistent_code,
                 "description": persistent_description,
                 "created_at": time.time(),
                 "updated_at": time.time(),
