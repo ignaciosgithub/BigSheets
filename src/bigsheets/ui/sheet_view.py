@@ -726,6 +726,49 @@ def benfords_law(data=None):
             function_manager.create_template("Benford's Law Analysis", benford_function_code, 
                                            "Analyzes first digit frequencies using Benford's Law")
             
+            row_sum_function_code = '''
+def row_sum(data=None):
+    """Sum the values in each row of the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        row_sums = df.sum(axis=1).tolist()
+        
+        return row_sums
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+            
+            row_avg_function_code = '''
+def row_average(data=None):
+    """Calculate the average of values in each row of the selected columns."""
+    import pandas as pd
+    import numpy as np
+    
+    if data is None:
+        return "Error: No data selected"
+    
+    try:
+        df = pd.DataFrame(data)
+        
+        row_avgs = df.mean(axis=1).tolist()
+        
+        return row_avgs
+    except Exception as e:
+        return f"Error: {str(e)}"
+'''
+            
+            function_manager.create_template("Row Sum", row_sum_function_code, 
+                                           "Sums values across each row of selected columns")
+            function_manager.create_template("Row Average", row_avg_function_code, 
+                                           "Calculates average across each row of selected columns")
+            
             function_manager.save_templates()
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox
