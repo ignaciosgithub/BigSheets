@@ -170,14 +170,36 @@ class BigSheetsApp(QMainWindow):
         try:
             self.statusBar().showMessage(f"Opening file: {file_path}")
             
+            import json
+            with open(file_path, 'r') as f:
+                workbook_data = json.load(f)
+            
             self.workbook = Workbook()
-            self.workbook.create_sheet("Sheet1")
             
             while self.tab_widget.count() > 0:
                 self.tab_widget.removeTab(0)
             
-            self.add_sheet_tab("Sheet1")
+            for sheet_name, sheet_data in workbook_data["sheets"].items():
+                sheet = self.workbook.create_sheet(sheet_name)
+                sheet.rows = sheet_data["rows"]
+                sheet.cols = sheet_data["cols"]
+                
+                for pos_str, cell_data in sheet_data["cells"].items():
+                    row, col = map(int, pos_str.split(","))
+                    sheet.set_cell_value(row, col, cell_data["value"], cell_data.get("formula"))
+                    
+                    cell = sheet.get_cell(row, col)
+                    cell.formatting = cell_data.get("formatting", {})
+                    
+                    if "image" in cell_data:
+                        cell.image = cell_data["image"]
+                    
+                    if "chart" in cell_data:
+                        cell.chart = cell_data["chart"]
+                
+                self.add_sheet_tab(sheet_name)
             
+            self.current_file_path = file_path
             filename = file_path.split("/")[-1]
             self.setWindowTitle(f"BigSheets - {filename}")
         except Exception as e:
@@ -185,11 +207,68 @@ class BigSheetsApp(QMainWindow):
     
     def save_workbook(self):
         """Save the current workbook."""
-        pass
+        if not hasattr(self, 'current_file_path') or not self.current_file_path:
+            self.save_workbook_as()
+            return
+            
+        self._save_to_file(self.current_file_path)
+        self.statusBar().showMessage(f"Workbook saved to: {self.current_file_path}")
     
     def save_workbook_as(self):
         """Save the current workbook with a new name."""
-        pass
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save BigSheets File", "", "BigSheets Files (*.bgs);;All Files (*)"
+        )
+        
+        if file_path:
+            if not file_path.endswith('.bgs'):
+                file_path += '.bgs'
+            
+            self.current_file_path = file_path
+            self._save_to_file(file_path)
+            
+            filename = file_path.split("/")[-1]
+            self.setWindowTitle(f"BigSheets - {filename}")
+            self.statusBar().showMessage(f"Workbook saved to: {file_path}")
+    
+    def _save_to_file(self, file_path):
+        """Save the workbook to a file."""
+        try:
+            workbook_data = {
+                "sheets": {}
+            }
+            
+            for sheet_name, sheet in self.workbook.sheets.items():
+                sheet_data = {
+                    "rows": sheet.rows,
+                    "cols": sheet.cols,
+                    "cells": {}
+                }
+                
+                for pos, cell in sheet.cells.items():
+                    row, col = pos
+                    cell_data = {
+                        "value": cell.value,
+                        "formula": cell.formula,
+                        "formatting": cell.formatting,
+                    }
+                    
+                    if hasattr(cell, "image") and cell.image:
+                        cell_data["image"] = cell.image
+                        
+                    if hasattr(cell, "chart") and cell.chart:
+                        cell_data["chart"] = cell.chart
+                    
+                    sheet_data["cells"][f"{row},{col}"] = cell_data
+                
+                workbook_data["sheets"][sheet_name] = sheet_data
+            
+            import json
+            with open(file_path, 'w') as f:
+                json.dump(workbook_data, f, indent=2)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save file: {str(e)}")
     
     def add_sheet(self):
         """Add a new sheet to the workbook."""

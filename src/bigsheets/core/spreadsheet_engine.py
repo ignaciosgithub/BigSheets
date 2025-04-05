@@ -10,6 +10,7 @@ This module provides the core spreadsheet functionality including:
 from typing import Dict, List, Any, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
+from bigsheets.core.command_manager import CommandManager, CellEditCommand, Command
 
 
 class Cell:
@@ -39,8 +40,7 @@ class Sheet:
         self.rows = rows
         self.cols = cols
         self.cells: Dict[Tuple[int, int], Cell] = {}
-        self.command_history = []
-        self.redo_stack = []
+        self.command_manager = CommandManager()
     
     def get_cell(self, row: int, col: int) -> Cell:
         """Get a cell at the specified position, creating it if it doesn't exist."""
@@ -55,75 +55,50 @@ class Sheet:
         old_value = cell.value
         old_formula = cell.formula
         
-        command = {
-            'type': 'cell_edit',
-            'row': row,
-            'col': col,
-            'old_value': old_value,
-            'new_value': value,
-            'old_formula': old_formula,
-            'new_formula': formula
-        }
+        def update_cell(sheet_id, row, col, value, formula):
+            cell = self.get_cell(row, col)
+            cell.value = value
+            cell.formula = formula
         
-        cell.value = value
-        cell.formula = formula
+        command = CellEditCommand(
+            sheet_id=self.name,
+            row=row,
+            col=col,
+            old_value=old_value,
+            new_value=value,
+            old_formula=old_formula,
+            new_formula=formula,
+            update_cell_func=update_cell
+        )
         
-        self.command_history.append(command)
-        self.redo_stack.clear()
-        
+        self.command_manager.execute_command(self.name, command)
     
     def undo(self) -> bool:
         """Undo the last command in this sheet."""
-        if not self.command_history:
-            return False
-        
-        command = self.command_history.pop()
-        self.redo_stack.append(command)
-        
-        if command['type'] == 'cell_edit':
-            row, col = command['row'], command['col']
-            cell = self.get_cell(row, col)
-            cell.value = command['old_value']
-            cell.formula = command['old_formula']
-        
-        
-        return True
+        return self.command_manager.undo(self.name)
     
     def redo(self) -> bool:
         """Redo the last undone command in this sheet."""
-        if not self.redo_stack:
-            return False
-        
-        command = self.redo_stack.pop()
-        self.command_history.append(command)
-        
-        if command['type'] == 'cell_edit':
-            row, col = command['row'], command['col']
-            cell = self.get_cell(row, col)
-            cell.value = command['new_value']
-            cell.formula = command['new_formula']
-        elif command['type'] == 'insert_row':
-            self._insert_row_impl(command['row'])
-        elif command['type'] == 'delete_row':
-            self._delete_row_impl(command['row'], command['cells'])
-        elif command['type'] == 'insert_column':
-            self._insert_column_impl(command['col'])
-        elif command['type'] == 'delete_column':
-            self._delete_column_impl(command['col'], command['cells'])
-        
-        return True
+        return self.command_manager.redo(self.name)
         
     def insert_row(self, row: int) -> None:
         """Insert a row at the specified position."""
-        command = {
-            'type': 'insert_row',
-            'row': row
-        }
+        class InsertRowCommand(Command):
+            def __init__(self, sheet, row):
+                self.sheet = sheet
+                self.row = row
+                
+            def execute(self):
+                self.sheet._insert_row_impl(self.row)
+                
+            def undo(self):
+                self.sheet._delete_row_impl(self.row, {})
+                
+            def redo(self):
+                self.execute()
         
-        self._insert_row_impl(row)
-        
-        self.command_history.append(command)
-        self.redo_stack.clear()
+        command = InsertRowCommand(self, row)
+        self.command_manager.execute_command(self.name, command)
     
     def _insert_row_impl(self, row: int) -> None:
         """Implementation of row insertion."""
@@ -148,16 +123,25 @@ class Sheet:
             if r == row:
                 deleted_cells[(r, c)] = cell
         
-        command = {
-            'type': 'delete_row',
-            'row': row,
-            'cells': deleted_cells
-        }
+        class DeleteRowCommand(Command):
+            def __init__(self, sheet, row, deleted_cells):
+                self.sheet = sheet
+                self.row = row
+                self.deleted_cells = deleted_cells
+                
+            def execute(self):
+                self.sheet._delete_row_impl(self.row, self.deleted_cells)
+                
+            def undo(self):
+                self.sheet._insert_row_impl(self.row)
+                for pos, cell in self.deleted_cells.items():
+                    self.sheet.cells[pos] = cell
+                
+            def redo(self):
+                self.execute()
         
-        self._delete_row_impl(row, deleted_cells)
-        
-        self.command_history.append(command)
-        self.redo_stack.clear()
+        command = DeleteRowCommand(self, row, deleted_cells)
+        self.command_manager.execute_command(self.name, command)
     
     def _delete_row_impl(self, row: int, deleted_cells: Dict[Tuple[int, int], Cell]) -> None:
         """Implementation of row deletion."""
@@ -181,15 +165,22 @@ class Sheet:
     
     def insert_column(self, col: int) -> None:
         """Insert a column at the specified position."""
-        command = {
-            'type': 'insert_column',
-            'col': col
-        }
+        class InsertColumnCommand(Command):
+            def __init__(self, sheet, col):
+                self.sheet = sheet
+                self.col = col
+                
+            def execute(self):
+                self.sheet._insert_column_impl(self.col)
+                
+            def undo(self):
+                self.sheet._delete_column_impl(self.col, {})
+                
+            def redo(self):
+                self.execute()
         
-        self._insert_column_impl(col)
-        
-        self.command_history.append(command)
-        self.redo_stack.clear()
+        command = InsertColumnCommand(self, col)
+        self.command_manager.execute_command(self.name, command)
     
     def _insert_column_impl(self, col: int) -> None:
         """Implementation of column insertion."""
@@ -214,16 +205,25 @@ class Sheet:
             if c == col:
                 deleted_cells[(r, c)] = cell
         
-        command = {
-            'type': 'delete_column',
-            'col': col,
-            'cells': deleted_cells
-        }
+        class DeleteColumnCommand(Command):
+            def __init__(self, sheet, col, deleted_cells):
+                self.sheet = sheet
+                self.col = col
+                self.deleted_cells = deleted_cells
+                
+            def execute(self):
+                self.sheet._delete_column_impl(self.col, self.deleted_cells)
+                
+            def undo(self):
+                self.sheet._insert_column_impl(self.col)
+                for pos, cell in self.deleted_cells.items():
+                    self.sheet.cells[pos] = cell
+                
+            def redo(self):
+                self.execute()
         
-        self._delete_column_impl(col, deleted_cells)
-        
-        self.command_history.append(command)
-        self.redo_stack.clear()
+        command = DeleteColumnCommand(self, col, deleted_cells)
+        self.command_manager.execute_command(self.name, command)
     
     def _delete_column_impl(self, col: int, deleted_cells: Dict[Tuple[int, int], Cell]) -> None:
         """Implementation of column deletion."""
@@ -247,33 +247,65 @@ class Sheet:
     
     def add_chart(self, chart: Dict[str, Any], row: int, col: int) -> None:
         """Add a chart to the sheet at the specified position."""
-        command = {
-            'type': 'add_chart',
-            'row': row,
-            'col': col,
-            'chart': chart
-        }
-        
         cell = self.get_cell(row, col)
-        cell.chart = chart
+        old_chart = getattr(cell, "chart", None)
         
-        self.command_history.append(command)
-        self.redo_stack.clear()
+        class AddChartCommand(Command):
+            def __init__(self, sheet, row, col, new_chart, old_chart):
+                self.sheet = sheet
+                self.row = row
+                self.col = col
+                self.new_chart = new_chart
+                self.old_chart = old_chart
+                
+            def execute(self):
+                cell = self.sheet.get_cell(self.row, self.col)
+                cell.chart = self.new_chart
+                
+            def undo(self):
+                cell = self.sheet.get_cell(self.row, self.col)
+                if self.old_chart:
+                    cell.chart = self.old_chart
+                else:
+                    if hasattr(cell, "chart"):
+                        delattr(cell, "chart")
+                
+            def redo(self):
+                self.execute()
+        
+        command = AddChartCommand(self, row, col, chart, old_chart)
+        self.command_manager.execute_command(self.name, command)
     
     def add_image(self, image_data: Dict[str, Any], row: int, col: int) -> None:
         """Add an image to the sheet at the specified position."""
-        command = {
-            'type': 'add_image',
-            'row': row,
-            'col': col,
-            'image_data': image_data
-        }
-        
         cell = self.get_cell(row, col)
-        cell.image = image_data
+        old_image = getattr(cell, "image", None)
         
-        self.command_history.append(command)
-        self.redo_stack.clear()
+        class AddImageCommand(Command):
+            def __init__(self, sheet, row, col, new_image, old_image):
+                self.sheet = sheet
+                self.row = row
+                self.col = col
+                self.new_image = new_image
+                self.old_image = old_image
+                
+            def execute(self):
+                cell = self.sheet.get_cell(self.row, self.col)
+                cell.image = self.new_image
+                
+            def undo(self):
+                cell = self.sheet.get_cell(self.row, self.col)
+                if self.old_image:
+                    cell.image = self.old_image
+                else:
+                    if hasattr(cell, "image"):
+                        delattr(cell, "image")
+                
+            def redo(self):
+                self.execute()
+        
+        command = AddImageCommand(self, row, col, image_data, old_image)
+        self.command_manager.execute_command(self.name, command)
 
 
 class Workbook:
