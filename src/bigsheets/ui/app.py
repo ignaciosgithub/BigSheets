@@ -41,6 +41,7 @@ class BigSheetsApp(QMainWindow):
         self.setWindowTitle("BigSheets")
         self.setGeometry(100, 100, 1200, 800)
         
+        self.menuBar().setVisible(True)
         self.create_menu_bar()
         
         self.central_widget = QWidget()
@@ -133,6 +134,7 @@ class BigSheetsApp(QMainWindow):
             insert_menu.addAction(insert_image_action)
             
             functions_menu = self.menuBar().addMenu("&Functions")
+            functions_menu.setVisible(True)
             
             function_editor_action = QAction("&Function Editor", self)
             function_editor_action.setShortcut("Ctrl+F")
@@ -438,8 +440,29 @@ class BigSheetsApp(QMainWindow):
     def open_function_editor(self):
         """Open the function editor dialog."""
         try:
+            print("Opening function editor dialog...")
             dialog = FunctionEditorDialog(self, self.function_manager)
+            print("Function editor dialog created successfully")
             dialog.exec_()
             self.statusBar().showMessage("Function templates updated")
         except Exception as e:
+            print(f"Error opening function editor: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to open function editor: {str(e)}")
+            
+    def keyPressEvent(self, event):
+        """Handle key press events globally."""
+        from PyQt5.QtGui import QKeySequence
+        from PyQt5.QtCore import Qt
+        
+        if (event.modifiers() & Qt.ControlModifier) and event.key() == Qt.Key_F:
+            self.open_function_editor()
+            return
+            
+        if (event.modifiers() & Qt.ControlModifier) and (event.modifiers() & Qt.ShiftModifier) and event.key() == Qt.Key_F:
+            current_index = self.tab_widget.currentIndex()
+            if current_index >= 0:
+                sheet_view = self.tab_widget.widget(current_index)
+                sheet_view.insert_function()
+            return
+            
+        super().keyPressEvent(event)
