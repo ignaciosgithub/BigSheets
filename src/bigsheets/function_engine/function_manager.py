@@ -27,6 +27,15 @@ class FunctionTemplate:
         self.updated_at = time.time()
         self.is_persistent = is_persistent
         self._compiled_function = None
+        self._result_value = None
+        
+    def __repr__(self):
+        """Return a string representation of the function result."""
+        return str(self._result_value) if self._result_value is not None else ""
+        
+    def __str__(self):
+        """Return a string representation of the function result."""
+        return str(self._result_value) if self._result_value is not None else ""
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert template to dictionary for serialization."""
