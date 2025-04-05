@@ -343,7 +343,13 @@ class Sheet:
                 cell.function_result = "Calculating..."
                 cell.value = "Calculating..."
                 
-                asyncio.create_task(self._execute_function_async())
+                try:
+                    loop = asyncio.get_running_loop()
+                    asyncio.create_task(self._execute_function_async())
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(self._execute_function_async())
                 
             async def _execute_function_async(self):
                 try:
