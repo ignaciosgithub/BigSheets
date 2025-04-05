@@ -259,7 +259,15 @@ def convert_to_persistent_code(code):
             new_code.append('            ' + line.lstrip())
     
     for ret in return_lines:
-        new_code.append('            yield ' + ret.strip())
+        new_code.append('            result_value = ' + ret.strip())
+        new_code.append('            # Convert to simple types if needed')
+        new_code.append('            if hasattr(result_value, "__iter__") and not isinstance(result_value, (list, dict, str)):')
+        new_code.append('                try:')
+        new_code.append('                    # Try to get the first value from the generator')
+        new_code.append('                    result_value = next(result_value)')
+        new_code.append('                except StopIteration:')
+        new_code.append('                    result_value = None')
+        new_code.append('            yield result_value')
     
     new_code.append('        # Brief pause to prevent CPU hogging')
     new_code.append('        await asyncio.sleep(0.1)')

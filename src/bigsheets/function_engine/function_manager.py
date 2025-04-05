@@ -96,7 +96,14 @@ class FunctionTemplate:
                         
                         if hasattr(gen_result, '__iter__') and not isinstance(gen_result, (list, dict, str)):
                             for value in gen_result:
-                                yield value
+                                if hasattr(value, '__iter__') and not isinstance(value, (list, dict, str)):
+                                    try:
+                                        simple_value = float(value) if isinstance(value, (int, float)) else str(value)
+                                        yield simple_value
+                                    except (ValueError, TypeError):
+                                        yield str(value)
+                                else:
+                                    yield value
                                 await asyncio.sleep(0.1)
                         else:
                             result = gen_result
@@ -110,7 +117,15 @@ class FunctionTemplate:
                                         None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
                                     )
                                     prev_values = current_values
-                                    yield result
+                                    
+                                    if hasattr(result, '__iter__') and not isinstance(result, (list, dict, str)):
+                                        try:
+                                            simple_result = next(result)
+                                            yield simple_result
+                                        except StopIteration:
+                                            yield None
+                                    else:
+                                        yield result
                                 
                                 await asyncio.sleep(0.1)
                     except Exception as e:
