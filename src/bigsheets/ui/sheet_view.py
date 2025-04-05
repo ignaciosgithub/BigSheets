@@ -484,7 +484,7 @@ class SheetView(QTableView):
         function_manager.load_templates()  # Explicitly load templates
         templates = function_manager.list_templates()
         
-        if not any(t.get("name") == "Sum Columns" for t in templates):
+        if not any(t.get("name") == "Sum Columns" for t in templates) or not any(t.get("name") == "Persistent Sum Columns" for t in templates):
             self.create_predefined_templates(function_manager)
             templates = function_manager.list_templates()
         
