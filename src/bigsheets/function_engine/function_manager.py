@@ -83,7 +83,7 @@ class FunctionTemplate:
                     asyncio.set_event_loop(loop)
                 
                 result = await loop.run_in_executor(
-                    None, lambda: self._compiled_function(*args, **kwargs)
+                    None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
                 )
             
             return result
@@ -98,10 +98,19 @@ class FunctionManager:
     
     def __init__(self, storage_dir: Optional[str] = None):
         self.templates: Dict[str, FunctionTemplate] = {}
-        self.storage_dir = storage_dir or os.path.expanduser("~/.bigsheets/functions")
+        
+        if storage_dir:
+            self.storage_dir = storage_dir
+        else:
+            if os.name == 'nt':  # Windows
+                app_data = os.environ.get('APPDATA', os.path.expanduser('~'))
+                self.storage_dir = os.path.join(app_data, 'BigSheets', 'functions')
+            else:  # Unix-like
+                self.storage_dir = os.path.expanduser("~/.bigsheets/functions")
         
         if self.storage_dir and not os.path.exists(self.storage_dir):
             os.makedirs(self.storage_dir, exist_ok=True)
+            print(f"Created function templates directory: {self.storage_dir}")
         
         if self.storage_dir and os.path.exists(self.storage_dir):
             self.load_templates()

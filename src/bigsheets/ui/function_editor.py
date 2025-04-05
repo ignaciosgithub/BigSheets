@@ -19,11 +19,13 @@ class FunctionEditorDialog(QDialog):
     Dialog for creating and editing function templates.
     """
     
-    def __init__(self, parent=None, function_manager=None):
+    def __init__(self, parent=None, function_manager=None, template_id=None):
         super().__init__(parent)
         
         self.function_manager = function_manager or FunctionManager()
-        self.function_manager.load_templates()  # Explicitly load templates
+
+        self.current_template_id = template_id
+
         
         self.setWindowTitle("Function Template Editor")
         self.setMinimumSize(800, 600)
@@ -91,8 +93,6 @@ class FunctionEditorDialog(QDialog):
         splitter.setSizes([200, 600])
         
         main_layout.addWidget(splitter)
-        
-        self.current_template_id = None
     
     def load_templates(self):
         """Load templates into the list."""
@@ -103,6 +103,9 @@ class FunctionEditorDialog(QDialog):
             item = QListWidgetItem(template["name"])
             item.setData(Qt.UserRole, template["id"])
             self.template_list.addItem(item)
+            
+            if self.current_template_id and template["id"] == self.current_template_id:
+                self.template_list.setCurrentItem(item)
     
     def on_template_selected(self, current, previous):
         """Handle template selection."""
