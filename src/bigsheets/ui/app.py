@@ -135,6 +135,7 @@ class BigSheetsApp(QMainWindow):
             functions_menu = self.menuBar().addMenu("&Functions")
             
             function_editor_action = QAction("&Function Editor", self)
+            function_editor_action.setShortcut("Ctrl+F")
             function_editor_action.triggered.connect(self.open_function_editor)
             functions_menu.addAction(function_editor_action)
             
