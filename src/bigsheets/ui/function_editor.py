@@ -23,7 +23,9 @@ class FunctionEditorDialog(QDialog):
         super().__init__(parent)
         
         self.function_manager = function_manager or FunctionManager()
+
         self.current_template_id = template_id
+
         
         self.setWindowTitle("Function Template Editor")
         self.setMinimumSize(800, 600)

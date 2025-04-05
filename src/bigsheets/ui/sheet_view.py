@@ -226,7 +226,7 @@ class SheetView(QTableView):
         menu.addSeparator()
         
         insert_function_action = QAction("Insert Function...", self)
-        insert_function_action.setShortcut("Ctrl+Shift+F")
+        insert_function_action.setShortcut("Ctrl+F")  # Update shortcut to match requirement
         insert_function_action.triggered.connect(self.insert_function)
         menu.addAction(insert_function_action)
         
@@ -481,9 +481,10 @@ class SheetView(QTableView):
         row, col = current_index.row(), current_index.column()
         
         function_manager = FunctionManager()
+        function_manager.load_templates()  # Explicitly load templates
         templates = function_manager.list_templates()
         
-        if not any(t.get("name") == "Sum Columns" for t in templates):
+        if not any(t.get("name") == "Sum Columns" for t in templates) or not any(t.get("name") == "Persistent Sum Columns" for t in templates):
             self.create_predefined_templates(function_manager)
             templates = function_manager.list_templates()
         
@@ -577,7 +578,9 @@ class SheetView(QTableView):
     
     def manage_functions(self):
         """Open the function template editor."""
-        dialog = FunctionEditorDialog(self, function_manager=FunctionManager())
+        function_manager = FunctionManager()
+        function_manager.load_templates()  # Explicitly load templates
+        dialog = FunctionEditorDialog(self, function_manager=function_manager)
         dialog.exec_()
     def get_selected_data(self):
         """Extract data from selected cells."""
@@ -596,7 +599,10 @@ class SheetView(QTableView):
             for col in range(min_col, max_col + 1):
                 cell = self.sheet.get_cell(row, col)
                 try:
-                    value = float(cell.value) if cell.value is not None else 0.0
+                    if isinstance(cell.value, list):
+                        value = cell.value  # Keep lists intact
+                    else:
+                        value = float(cell.value) if cell.value is not None else 0.0
                 except (ValueError, TypeError):
                     value = 0.0  # Default for non-numeric values
                 row_data.append(value)
