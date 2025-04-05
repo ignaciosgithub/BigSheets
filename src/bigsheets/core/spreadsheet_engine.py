@@ -18,14 +18,15 @@ class Cell:
     """
     Represents a single cell in a spreadsheet with content, formatting, and formula support.
     """
-    def __init__(self, value: Any = None, formula: str = None):
+    def __init__(self, value: Any = None, formula: Optional[str] = None):
         self.value = value
         self.formula = formula
         self.formatting = {}
-        self.dependencies = set()
-        self.dependents = set()
-        self.function_id = None  # Store reference to function template
+        self.dependencies = set()  # Cells that this cell depends on for its value
+        self.dependents = set()    # Cells that depend on this cell's value
+        self.function_id = None    # Store reference to function template
         self.function_result = None  # Store the result of function execution
+        self.source_cells = []     # Store source cell ranges for persistent functions
     
     def __repr__(self) -> str:
         if self.formula:
@@ -62,6 +63,8 @@ class Sheet:
             cell = self.get_cell(row, col)
             cell.value = value
             cell.formula = formula
+            
+            self._update_dependent_cells(row, col)
         
         command = CellEditCommand(
             sheet_id=self.name,
@@ -83,6 +86,32 @@ class Sheet:
     def redo(self) -> bool:
         """Redo the last undone command in this sheet."""
         return self.command_manager.redo(self.name)
+        
+    def _update_dependent_cells(self, row: int, col: int) -> None:
+        """Update all cells that depend on the specified cell."""
+        cell = self.get_cell(row, col)
+        
+        for dependent_row, dependent_col in cell.dependents:
+            dependent_cell = self.get_cell(dependent_row, dependent_col)
+            
+            if dependent_cell.function_id is not None:
+                if hasattr(dependent_cell, 'source_cells') and dependent_cell.source_cells:
+                    selected_data = []
+                    for src_row_range, src_col_range in dependent_cell.source_cells:
+                        data = []
+                        for r in range(src_row_range[0], src_row_range[1] + 1):
+                            row_data = []
+                            for c in range(src_col_range[0], src_col_range[1] + 1):
+                                src_cell = self.get_cell(r, c)
+                                try:
+                                    value = float(src_cell.value) if src_cell.value is not None else 0.0
+                                except (ValueError, TypeError):
+                                    value = 0.0
+                                row_data.append(value)
+                            data.append(row_data)
+                        selected_data.append(data)
+                    
+                    self.execute_function(dependent_row, dependent_col, dependent_cell.function_id, selected_data)
         
     def insert_row(self, row: int) -> None:
         """Insert a row at the specified position."""
@@ -335,10 +364,39 @@ class Sheet:
                 self.old_function_id = old_function_id
                 self.old_result = old_result
                 self.selected_data = selected_data
+                self.persistent = True  # Default to persistent functions
                 
             def execute(self):
                 cell = self.sheet.get_cell(self.row, self.col)
                 cell.function_id = self.function_id
+                
+                for dep_row, dep_col in list(cell.dependencies):
+                    dep_cell = self.sheet.get_cell(dep_row, dep_col)
+                    if (self.row, self.col) in dep_cell.dependents:
+                        dep_cell.dependents.remove((self.row, self.col))
+                cell.dependencies.clear()
+                
+                if self.persistent and self.selected_data is not None:
+                    cell.source_cells = []
+                    min_row = min_col = float('inf')
+                    max_row = max_col = -float('inf')
+                    
+                    for r_idx, row_data in enumerate(self.selected_data):
+                        for c_idx, _ in enumerate(row_data):
+                            min_row = min(min_row, r_idx)
+                            max_row = max(max_row, r_idx)
+                            min_col = min(min_col, c_idx)
+                            max_col = max(max_col, c_idx)
+                    
+                    row_range = (int(min_row), int(max_row))
+                    col_range = (int(min_col), int(max_col))
+                    cell.source_cells.append((row_range, col_range))
+                    
+                    for r in range(int(min_row), int(max_row) + 1):
+                        for c in range(int(min_col), int(max_col) + 1):
+                            source_cell = self.sheet.get_cell(r, c)
+                            source_cell.dependents.add((self.row, self.col))
+                            cell.dependencies.add((r, c))
                 
                 cell.function_result = "Calculating..."
                 cell.value = "Calculating..."
