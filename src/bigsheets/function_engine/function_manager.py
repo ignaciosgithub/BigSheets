@@ -74,6 +74,9 @@ class FunctionTemplate:
         """Execute the function asynchronously."""
         if self._compiled_function is None:
             self.compile()
+            
+        if self._compiled_function is None:
+            return None
         
         try:
             if inspect.iscoroutinefunction(self._compiled_function):
@@ -85,13 +88,29 @@ class FunctionTemplate:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 
-                result = await loop.run_in_executor(
-                    None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
-                )
+                if self.is_persistent:
+                    result = None
+                    prev_values = None
+                    
+                    while True:
+                        current_values = args[0] if args else None
+                        
+                        if current_values != prev_values:
+                            result = await loop.run_in_executor(
+                                None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                            )
+                            prev_values = current_values
+                            yield result
+                            
+                        await asyncio.sleep(0.1)
+                else:
+                    result = await loop.run_in_executor(
+                        None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                    )
             
             return result
         except Exception as e:
-            raise RuntimeError(f"Function execution error: {str(e)}")
+            return f"Error: {str(e)}"
 
 
 class FunctionManager:
