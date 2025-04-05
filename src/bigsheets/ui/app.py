@@ -158,7 +158,30 @@ class BigSheetsApp(QMainWindow):
     
     def open_workbook(self):
         """Open an existing workbook."""
-        pass
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open BigSheets File", "", "BigSheets Files (*.bgs);;All Files (*)"
+        )
+        
+        if file_path:
+            self.open_file(file_path)
+    
+    def open_file(self, file_path):
+        """Open a BigSheets file from the given path."""
+        try:
+            self.statusBar().showMessage(f"Opening file: {file_path}")
+            
+            self.workbook = Workbook()
+            self.workbook.create_sheet("Sheet1")
+            
+            while self.tab_widget.count() > 0:
+                self.tab_widget.removeTab(0)
+            
+            self.add_sheet_tab("Sheet1")
+            
+            filename = file_path.split("/")[-1]
+            self.setWindowTitle(f"BigSheets - {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open file: {str(e)}")
     
     def save_workbook(self):
         """Save the current workbook."""
@@ -237,11 +260,67 @@ class BigSheetsApp(QMainWindow):
         )
         
         if file_path:
+            self.import_csv_file(file_path)
+    
+    def import_csv_file(self, file_path):
+        """Import data from a CSV file at the given path."""
+        try:
             self.statusBar().showMessage(f"Importing CSV: {file_path}")
+            
+            sheet_name = file_path.split("/")[-1].replace(".csv", "")
+            
+            base_name = sheet_name
+            counter = 1
+            while sheet_name in self.workbook.sheets:
+                sheet_name = f"{base_name}_{counter}"
+                counter += 1
+            
+            sheet = self.workbook.create_sheet(sheet_name)
+            
+            csv_importer = CSVImporter()
+            data = csv_importer.import_csv(file_path)
+            
+            for row_idx, row in enumerate(data):
+                for col_idx, value in enumerate(row):
+                    sheet.set_cell_value(row_idx, col_idx, value)
+            
+            self.add_sheet_tab(sheet_name)
+            
+            self.statusBar().showMessage(f"CSV imported: {file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to import CSV: {str(e)}")
     
     def import_database(self):
         """Import data from a database."""
         pass
+    
+    def connect_to_database(self, connection_string):
+        """Connect to a database using the given connection string."""
+        try:
+            self.statusBar().showMessage(f"Connecting to database: {connection_string}")
+            
+            sheet_name = "Database_Data"
+            
+            base_name = sheet_name
+            counter = 1
+            while sheet_name in self.workbook.sheets:
+                sheet_name = f"{base_name}_{counter}"
+                counter += 1
+            
+            sheet = self.workbook.create_sheet(sheet_name)
+            
+            db_connector = DatabaseConnector()
+            data = db_connector.connect_and_query(connection_string)
+            
+            for row_idx, row in enumerate(data):
+                for col_idx, value in enumerate(row):
+                    sheet.set_cell_value(row_idx, col_idx, value)
+            
+            self.add_sheet_tab(sheet_name)
+            
+            self.statusBar().showMessage(f"Database connected: {connection_string}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to connect to database: {str(e)}")
     
     def insert_chart(self):
         """Insert a chart in the current sheet."""

@@ -18,7 +18,42 @@ class CSVImporter:
     
     def __init__(self):
         """Initialize the CSV importer."""
-        pass
+        self.default_options = {
+            'delimiter': ',',
+            'has_header': True,
+            'encoding': 'utf-8',
+            'quotechar': '"',
+            'skip_rows': 0
+        }
+        
+    def import_csv(self, file_path: str, **options) -> List[List[Any]]:
+        """
+        Import a CSV file and return the data as a list of lists.
+        
+        Args:
+            file_path: Path to the CSV file
+            **options: Additional options to override defaults
+            
+        Returns:
+            List of lists containing the CSV data
+        """
+        opts = {**self.default_options, **options}
+        
+        df = self.parse_csv(
+            file_path,
+            delimiter=opts['delimiter'],
+            has_header=opts['has_header'],
+            encoding=opts['encoding'],
+            quotechar=opts['quotechar'],
+            skip_rows=opts['skip_rows']
+        )
+        
+        data = df.values.tolist()
+        
+        if opts['has_header']:
+            data.insert(0, df.columns.tolist())
+        
+        return data
     
     def parse_csv(self, file_path: str, delimiter: str = ',', 
                  has_header: bool = True, encoding: str = 'utf-8',

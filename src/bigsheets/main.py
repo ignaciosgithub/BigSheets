@@ -24,13 +24,13 @@ def main():
     window = BigSheetsApp()
     
     if args.file:
-        pass
+        window.open_file(args.file)
     
     if args.csv:
-        pass
+        window.import_csv_file(args.csv)
     
     if args.db:
-        pass
+        window.connect_to_database(args.db)
     
     sys.exit(app.exec_())
 

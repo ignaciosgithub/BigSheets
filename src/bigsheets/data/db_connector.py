@@ -18,6 +18,46 @@ class DatabaseConnector:
     def __init__(self):
         """Initialize the database connector."""
         self.connections = {}  # Store active connections
+        
+    def connect_and_query(self, connection_string: str, query: str = None) -> List[List[Any]]:
+        """
+        Connect to a database and execute a query.
+        
+        Args:
+            connection_string: SQLAlchemy connection string
+            query: SQL query to execute (optional)
+            
+        Returns:
+            List of lists containing the query results
+        """
+        connection_id = f"conn_{len(self.connections) + 1}"
+        
+        try:
+            self.create_connection(connection_id, connection_string)
+            
+            if not query:
+                tables = self.list_tables(connection_id)
+                if not tables:
+                    return [["No tables found in database"]]
+                
+                first_table = tables[0]
+                query = f"SELECT * FROM {first_table} LIMIT 100"
+            
+            df = self.execute_query(connection_id, query)
+            
+            data = df.values.tolist()
+            
+            if not df.empty:
+                data.insert(0, df.columns.tolist())
+            
+            self.close_connection(connection_id)
+            
+            return data
+        except Exception as e:
+            if connection_id in self.connections:
+                self.close_connection(connection_id)
+            
+            return [[f"Error: {str(e)}"]]
     
     def create_connection(self, connection_id: str, connection_string: str) -> None:
         """
