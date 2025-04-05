@@ -27,6 +27,9 @@ class Cell:
         self.function_id = None    # Store reference to function template
         self.function_result = None  # Store the result of function execution
         self.source_cells = []     # Store source cell ranges for persistent functions
+        self.target_cells = []     # Store target cells for multi-cell output
+        self.image = None          # Store image data
+        self.chart = None          # Store chart data
     
     def __repr__(self) -> str:
         if self.formula:
@@ -95,6 +98,12 @@ class Sheet:
             dependent_cell = self.get_cell(dependent_row, dependent_col)
             
             if dependent_cell.function_id is not None:
+                if hasattr(dependent_cell, 'target_cells') and dependent_cell.target_cells:
+                    for target_row, target_col in dependent_cell.target_cells:
+                        target_cell = self.get_cell(target_row, target_col)
+                        target_cell.value = None
+                        target_cell.function_result = None
+                
                 if hasattr(dependent_cell, 'source_cells') and dependent_cell.source_cells:
                     selected_data = []
                     for src_row_range, src_col_range in dependent_cell.source_cells:
@@ -365,6 +374,8 @@ class Sheet:
                 self.old_result = old_result
                 self.selected_data = selected_data
                 self.persistent = True  # Default to persistent functions
+                self.multi_cell_result = False  # Flag for functions that output to multiple cells
+                self.target_cells = []  # Store target cells for multi-cell output
                 
             def execute(self):
                 cell = self.sheet.get_cell(self.row, self.col)
@@ -375,6 +386,13 @@ class Sheet:
                     if (self.row, self.col) in dep_cell.dependents:
                         dep_cell.dependents.remove((self.row, self.col))
                 cell.dependencies.clear()
+                
+                if hasattr(cell, 'target_cells'):
+                    for target_row, target_col in cell.target_cells:
+                        target_cell = self.sheet.get_cell(target_row, target_col)
+                        target_cell.value = None
+                        target_cell.function_result = None
+                cell.target_cells = []
                 
                 if self.persistent and self.selected_data is not None:
                     cell.source_cells = []
@@ -419,8 +437,52 @@ class Sheet:
                     else:
                         result = await function_manager.execute_function(self.function_id)
                     
-                    cell.function_result = result
-                    cell.value = result
+                    if isinstance(result, list) and "_row_" in self.function_id.lower():
+                        cell.function_result = "Multi-cell output"
+                        cell.value = "See adjacent cells →"
+                        cell.target_cells = []
+                        
+                        for i, val in enumerate(result):
+                            target_row = self.row
+                            target_col = self.col + i + 1
+                            target_cell = self.sheet.get_cell(target_row, target_col)
+                            
+                            if target_cell.value is not None and not hasattr(target_cell, 'function_id'):
+                                continue
+                                
+                            target_cell.value = val
+                            target_cell.function_result = val
+                            cell.target_cells.append((target_row, target_col))
+                            
+                            self.sheet.model.dataChanged.emit(
+                                self.sheet.model.index(target_row, target_col),
+                                self.sheet.model.index(target_row, target_col)
+                            )
+                    
+                    elif isinstance(result, list) and not any(isinstance(x, list) for x in result):
+                        cell.function_result = "Multi-cell output"
+                        cell.value = "See cells below ↓"
+                        cell.target_cells = []
+                        
+                        for i, val in enumerate(result):
+                            target_row = self.row + i + 1
+                            target_col = self.col
+                            target_cell = self.sheet.get_cell(target_row, target_col)
+                            
+                            if target_cell.value is not None and not hasattr(target_cell, 'function_id'):
+                                continue
+                                
+                            target_cell.value = val
+                            target_cell.function_result = val
+                            cell.target_cells.append((target_row, target_col))
+                            
+                            self.sheet.model.dataChanged.emit(
+                                self.sheet.model.index(target_row, target_col),
+                                self.sheet.model.index(target_row, target_col)
+                            )
+                    else:
+                        cell.function_result = result
+                        cell.value = result
                 except Exception as e:
                     cell.function_result = f"Error: {str(e)}"
                     cell.value = f"Error: {str(e)}"
