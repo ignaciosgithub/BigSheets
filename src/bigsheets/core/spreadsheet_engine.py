@@ -7,9 +7,10 @@ This module provides the core spreadsheet functionality including:
 - Dependency tracking and recalculation
 """
 
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Dict, List, Any, Optional, Tuple, Union, Callable, Awaitable
 import numpy as np
 import pandas as pd
+import asyncio
 from bigsheets.core.command_manager import CommandManager, CellEditCommand, Command
 
 
@@ -23,6 +24,8 @@ class Cell:
         self.formatting = {}
         self.dependencies = set()
         self.dependents = set()
+        self.function_id = None  # Store reference to function template
+        self.function_result = None  # Store the result of function execution
     
     def __repr__(self) -> str:
         if self.formula:
@@ -305,6 +308,64 @@ class Sheet:
                 self.execute()
         
         command = AddImageCommand(self, row, col, image_data, old_image)
+        self.command_manager.execute_command(self.name, command)
+        
+    def execute_function(self, row: int, col: int, function_id: str) -> None:
+        """
+        Assign a function to a cell and execute it.
+        
+        Args:
+            row: Row index
+            col: Column index
+            function_id: ID of the function template to execute
+        """
+        from bigsheets.function_engine.function_manager import FunctionManager
+        
+        cell = self.get_cell(row, col)
+        old_function_id = cell.function_id
+        old_result = cell.function_result
+        
+        class ExecuteFunctionCommand(Command):
+            def __init__(self, sheet, row, col, function_id, old_function_id, old_result):
+                self.sheet = sheet
+                self.row = row
+                self.col = col
+                self.function_id = function_id
+                self.old_function_id = old_function_id
+                self.old_result = old_result
+                
+            def execute(self):
+                cell = self.sheet.get_cell(self.row, self.col)
+                cell.function_id = self.function_id
+                
+                cell.function_result = "Calculating..."
+                cell.value = "Calculating..."
+                
+                asyncio.create_task(self._execute_function_async())
+                
+            async def _execute_function_async(self):
+                try:
+                    cell = self.sheet.get_cell(self.row, self.col)
+                    function_manager = FunctionManager()
+                    
+                    result = await function_manager.execute_function(self.function_id)
+                    
+                    cell.function_result = result
+                    cell.value = result
+                except Exception as e:
+                    cell.function_result = f"Error: {str(e)}"
+                    cell.value = f"Error: {str(e)}"
+                
+            def undo(self):
+                cell = self.sheet.get_cell(self.row, self.col)
+                cell.function_id = self.old_function_id
+                cell.function_result = self.old_result
+                cell.value = self.old_result
+                
+            def redo(self):
+                self.execute()
+        
+        command = ExecuteFunctionCommand(self, row, col, function_id, old_function_id, old_result)
         self.command_manager.execute_command(self.name, command)
 
 
