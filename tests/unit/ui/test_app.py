@@ -181,6 +181,79 @@ class TestBigSheetsApp(unittest.TestCase):
         self.app_window.add_sheet_tab.assert_called_once_with("Database_Data")
         
         self.app_window.statusBar().showMessage.assert_called_with("Database connected: sqlite:///test.db")
+    
+    @patch('src.bigsheets.ui.app.QFileDialog')
+    @patch('json.dump')
+    @patch('builtins.open', new_callable=unittest.mock.mock_open)
+    def test_save_workbook_as(self, mock_open, mock_json_dump, mock_file_dialog):
+        """Test saving a workbook with a new filename."""
+        mock_file_dialog.getSaveFileName.return_value = ("/path/to/save.bgs", "")
+        
+        self.app_window.workbook.sheets = {
+            "Sheet1": MagicMock(spec=Sheet)
+        }
+        sheet = self.app_window.workbook.sheets["Sheet1"]
+        sheet.name = "Sheet1"
+        sheet.rows = 1000
+        sheet.cols = 100
+        sheet.cells = {(0, 0): MagicMock()}
+        sheet.cells[(0, 0)].value = "Test Value"
+        sheet.cells[(0, 0)].formula = None
+        
+        self.app_window.save_workbook_as()
+        
+        mock_file_dialog.getSaveFileName.assert_called_once()
+        mock_open.assert_called_once_with("/path/to/save.bgs", "w")
+        mock_json_dump.assert_called_once()
+        
+        self.app_window.setWindowTitle.assert_called_once_with("BigSheets - save.bgs")
+        self.app_window.statusBar().showMessage.assert_called_with("File saved: /path/to/save.bgs")
+    
+    @patch('json.dump')
+    @patch('builtins.open', new_callable=unittest.mock.mock_open)
+    def test_save_workbook_existing_file(self, mock_open, mock_json_dump):
+        """Test saving a workbook to an existing file path."""
+        self.app_window.current_file = "/path/to/existing.bgs"
+        
+        self.app_window.workbook.sheets = {
+            "Sheet1": MagicMock(spec=Sheet)
+        }
+        sheet = self.app_window.workbook.sheets["Sheet1"]
+        sheet.name = "Sheet1"
+        sheet.rows = 1000
+        sheet.cols = 100
+        sheet.cells = {(0, 0): MagicMock()}
+        sheet.cells[(0, 0)].value = "Test Value"
+        sheet.cells[(0, 0)].formula = None
+        
+        self.app_window.save_workbook()
+        
+        mock_open.assert_called_once_with("/path/to/existing.bgs", "w")
+        mock_json_dump.assert_called_once()
+        
+        self.app_window.statusBar().showMessage.assert_called_with("File saved: /path/to/existing.bgs")
+    
+    @patch('src.bigsheets.ui.app.QFileDialog')
+    def test_save_workbook_no_file(self, mock_file_dialog):
+        """Test saving a workbook when no file path exists."""
+        self.app_window.current_file = None
+        self.app_window.save_workbook_as = MagicMock()
+        
+        self.app_window.save_workbook()
+        
+        self.app_window.save_workbook_as.assert_called_once()
+    
+    @patch('src.bigsheets.ui.app.QMessageBox')
+    @patch('json.dump')
+    @patch('builtins.open', new_callable=unittest.mock.mock_open)
+    def test_save_workbook_error(self, mock_open, mock_json_dump, mock_message_box):
+        """Test error handling when saving a workbook."""
+        self.app_window.current_file = "/path/to/existing.bgs"
+        mock_json_dump.side_effect = Exception("Test error")
+        
+        self.app_window.save_workbook()
+        
+        mock_message_box.critical.assert_called_once()
 
 
 if __name__ == "__main__":
