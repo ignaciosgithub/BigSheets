@@ -76,7 +76,12 @@ class FunctionTemplate:
             if inspect.iscoroutinefunction(self._compiled_function):
                 result = await self._compiled_function(*args, **kwargs)
             else:
-                loop = asyncio.get_event_loop()
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
                 result = await loop.run_in_executor(
                     None, lambda: self._compiled_function(*args, **kwargs)
                 )

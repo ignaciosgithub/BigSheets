@@ -43,6 +43,7 @@ class BigSheetsApp(QMainWindow):
         
         self.menuBar().setVisible(True)
         self.create_menu_bar()
+        self.menuBar().setVisible(True)
         
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -441,11 +442,20 @@ class BigSheetsApp(QMainWindow):
         """Open the function editor dialog."""
         try:
             print("Opening function editor dialog...")
+            if not hasattr(self, 'function_manager') or self.function_manager is None:
+                self.function_manager = FunctionManager()
+                print("Function manager initialized")
+            
             dialog = FunctionEditorDialog(self, self.function_manager)
             print("Function editor dialog created successfully")
-            dialog.exec_()
+            dialog.setModal(True)
+            dialog.show()  # Show the dialog first
+            result = dialog.exec_()  # Then execute it
+            print(f"Dialog execution result: {result}")
             self.statusBar().showMessage("Function templates updated")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Error opening function editor: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to open function editor: {str(e)}")
             

@@ -769,6 +769,7 @@ def row_average(data=None):
             function_manager.create_template("Row Average", row_avg_function_code, 
                                            "Calculates average across each row of selected columns")
             
+
             persistent_sum_function_code = '''
 def persistent_sum_columns(data=None):
     """Sum the values in the selected columns. Updates automatically when source values change."""
@@ -931,6 +932,7 @@ def persistent_benfords_law(data=None):
             function_manager.create_template("Persistent Benford's Law Analysis", persistent_benford_function_code, 
                                            "Analyzes first digit frequencies using Benford's Law and updates automatically when source values change")
             
+
             function_manager.save_templates()
         except Exception as e:
             from PyQt5.QtWidgets import QMessageBox
