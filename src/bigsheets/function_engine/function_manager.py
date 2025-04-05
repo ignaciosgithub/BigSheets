@@ -108,10 +108,13 @@ class FunctionTemplate:
                                 if hasattr(value, '__iter__') and not isinstance(value, (list, dict, str)):
                                     try:
                                         simple_value = float(value) if isinstance(value, (int, float)) else str(value)
+                                        self._result_value = simple_value  # Set result value for __repr__ and __str__
                                         yield simple_value
                                     except (ValueError, TypeError):
+                                        self._result_value = str(value)  # Set result value for __repr__ and __str__
                                         yield str(value)
                                 else:
+                                    self._result_value = value  # Set result value for __repr__ and __str__
                                     yield value
                                 await asyncio.sleep(0.1)
                         else:
@@ -130,10 +133,13 @@ class FunctionTemplate:
                                     if hasattr(result, '__iter__') and not isinstance(result, (list, dict, str)):
                                         try:
                                             simple_result = next(result)
+                                            self._result_value = simple_result  # Set result value for __repr__ and __str__
                                             yield simple_result
                                         except StopIteration:
+                                            self._result_value = None  # Set result value for __repr__ and __str__
                                             yield None
                                     else:
+                                        self._result_value = result  # Set result value for __repr__ and __str__
                                         yield result
                                 
                                 await asyncio.sleep(0.1)
@@ -144,9 +150,12 @@ class FunctionTemplate:
                         None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
                     )
             
+            self._result_value = result  # Set result value for __repr__ and __str__
             return result
         except Exception as e:
-            return f"Error: {str(e)}"
+            error_msg = f"Error: {str(e)}"
+            self._result_value = error_msg  # Set result value for error messages
+            return error_msg
 
 
 class FunctionManager:

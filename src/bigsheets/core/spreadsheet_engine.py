@@ -94,7 +94,7 @@ class Sheet:
         """Update all cells that depend on the specified cell."""
         cell = self.get_cell(row, col)
         
-        for dependent_row, dependent_col in cell.dependents:
+        for dependent_row, dependent_col in list(cell.dependents):  # Create a copy using list()
             dependent_cell = self.get_cell(dependent_row, dependent_col)
             
             if dependent_cell.function_id is not None:
