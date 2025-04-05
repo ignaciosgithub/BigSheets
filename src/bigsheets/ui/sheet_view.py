@@ -6,12 +6,14 @@ This module provides the UI component for displaying and interacting with a shee
 
 from PyQt5.QtWidgets import (
     QTableView, QHeaderView, QAbstractItemView, QMenu, QAction,
-    QStyledItemDelegate, QStyleOptionViewItem, QWidget
+    QStyledItemDelegate, QStyleOptionViewItem, QWidget, QDialog
 )
 from PyQt5.QtCore import Qt, QAbstractTableModel, QModelIndex, QVariant
 from PyQt5.QtGui import QColor, QBrush, QPainter
 
 from bigsheets.core.spreadsheet_engine import Sheet
+from bigsheets.function_engine.function_manager import FunctionManager
+from bigsheets.ui.function_editor import FunctionEditorDialog
 
 
 class SheetTableModel(QAbstractTableModel):
@@ -220,6 +222,16 @@ class SheetView(QTableView):
         insert_image_action = QAction("Insert Image...", self)
         insert_image_action.triggered.connect(self.insert_image)
         menu.addAction(insert_image_action)
+        
+        menu.addSeparator()
+        
+        insert_function_action = QAction("Insert Function...", self)
+        insert_function_action.triggered.connect(self.insert_function)
+        menu.addAction(insert_function_action)
+        
+        manage_functions_action = QAction("Manage Functions...", self)
+        manage_functions_action.triggered.connect(self.manage_functions)
+        menu.addAction(manage_functions_action)
 
         menu.exec_(event.globalPos())
 
@@ -355,17 +367,22 @@ class SheetView(QTableView):
                 data.append(row_data)
 
             chart_engine = ChartEngine()
-            chart_type_str = chart_type.currentText().lower().replace(" ", "_")
+            chart_type_str = chart_type.currentText().lower().split()[0]  # Use first word only (bar, line, pie, scatter)
 
-            chart = chart_engine.create_chart(
-                chart_type=chart_type_str,
-                data=data,
-                title=f"{chart_type.currentText()} - {min_row},{min_col} to {max_row},{max_col}",
-                x_label=f"Row {min_row}",
-                y_label="Values"
-            )
-
-            self.sheet.add_chart(chart, min_row, min_col)
+            try:
+                chart = chart_engine.create_chart(
+                    chart_type=chart_type_str,
+                    data=data,
+                    title=f"{chart_type.currentText()} - {min_row},{min_col} to {max_row},{max_col}",
+                    x_label=f"Row {min_row}",
+                    y_label="Values"
+                )
+                
+                self.sheet.add_chart(chart, min_row, min_col)
+                self.model.dataChanged.emit(self.model.index(min_row, min_col), self.model.index(min_row, min_col))
+            except ValueError as e:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Chart Error", f"Failed to create chart: {str(e)}")
 
     def insert_image(self):
         """Insert an image at the current position."""
@@ -449,3 +466,64 @@ class SheetView(QTableView):
         line_height = font_metrics.height() + 6  # Add padding
 
         self.setRowHeight(row, line_height)
+        
+    def insert_function(self):
+        """Insert a function at the current position."""
+        current_index = self.currentIndex()
+        if not current_index.isValid():
+            return
+        
+        row, col = current_index.row(), current_index.column()
+        
+        function_manager = FunctionManager()
+        templates = function_manager.list_templates()
+        
+        if not templates:
+            from PyQt5.QtWidgets import QMessageBox
+            result = QMessageBox.question(
+                self,
+                "No Functions Available",
+                "No function templates found. Would you like to create one?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            
+            if result == QMessageBox.Yes:
+                self.manage_functions()
+            
+            return
+        
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QListWidget, QDialogButtonBox, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Select Function")
+        layout = QVBoxLayout(dialog)
+        
+        layout.addWidget(QLabel("Select a function template:"))
+        
+        function_list = QListWidget()
+        for template in templates:
+            function_list.addItem(template["name"])
+            function_list.item(function_list.count() - 1).setData(Qt.UserRole, template["id"])
+        
+        layout.addWidget(function_list)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        if dialog.exec_() == QDialog.Accepted and function_list.currentItem():
+            function_id = function_list.currentItem().data(Qt.UserRole)
+            
+            self.sheet.execute_function(row, col, function_id)
+            
+            self.model.dataChanged.emit(
+                self.model.index(row, col),
+                self.model.index(row, col)
+            )
+    
+    def manage_functions(self):
+        """Open the function template editor."""
+        dialog = FunctionEditorDialog(self, function_manager=FunctionManager())
+        dialog.exec_()
