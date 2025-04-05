@@ -18,13 +18,14 @@ class FunctionTemplate:
     Represents a user-defined function template.
     """
     
-    def __init__(self, name: str, code: str, description: str = ""):
+    def __init__(self, name: str, code: str, description: str = "", is_persistent: bool = False):
         self.id = str(uuid.uuid4())
         self.name = name
         self.code = code
         self.description = description
         self.created_at = time.time()
         self.updated_at = time.time()
+        self.is_persistent = is_persistent
         self._compiled_function = None
     
     def to_dict(self) -> Dict[str, Any]:
@@ -115,9 +116,9 @@ class FunctionManager:
         if self.storage_dir and os.path.exists(self.storage_dir):
             self.load_templates()
     
-    def create_template(self, name: str, code: str, description: str = "") -> FunctionTemplate:
+    def create_template(self, name: str, code: str, description: str = "", is_persistent: bool = False) -> FunctionTemplate:
         """Create a new function template."""
-        template = FunctionTemplate(name, code, description)
+        template = FunctionTemplate(name, code, description, is_persistent)
         
         template.compile()
         
