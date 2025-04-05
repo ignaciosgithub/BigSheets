@@ -444,7 +444,8 @@ class BigSheetsApp(QMainWindow):
             print("Opening function editor dialog...")
             if not hasattr(self, 'function_manager') or self.function_manager is None:
                 self.function_manager = FunctionManager()
-                print("Function manager initialized")
+                self.function_manager.load_templates()  # Explicitly load templates
+                print("Function manager initialized and templates loaded"); print(f"Available templates: {[t.get('name') for t in self.function_manager.list_templates()]}")
             
             dialog = FunctionEditorDialog(self, self.function_manager)
             print("Function editor dialog created successfully")
@@ -465,6 +466,8 @@ class BigSheetsApp(QMainWindow):
         from PyQt5.QtCore import Qt
         
         if (event.modifiers() & Qt.ControlModifier) and event.key() == Qt.Key_F:
+            if hasattr(self, 'function_manager'):
+                self.function_manager.load_templates()  # Explicitly load templates
             self.open_function_editor()
             return
             
