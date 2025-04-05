@@ -113,7 +113,10 @@ class Sheet:
                             for c in range(src_col_range[0], src_col_range[1] + 1):
                                 src_cell = self.get_cell(r, c)
                                 try:
-                                    value = float(src_cell.value) if src_cell.value is not None else 0.0
+                                    if isinstance(src_cell.value, list):
+                                        value = src_cell.value  # Keep lists intact
+                                    else:
+                                        value = float(src_cell.value) if src_cell.value is not None else 0.0
                                 except (ValueError, TypeError):
                                     value = 0.0
                                 row_data.append(value)
