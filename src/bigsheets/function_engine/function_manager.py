@@ -89,20 +89,32 @@ class FunctionTemplate:
                     asyncio.set_event_loop(loop)
                 
                 if self.is_persistent:
-                    result = None
-                    prev_values = None
-                    
-                    while True:
-                        current_values = args[0] if args else None
+                    try:
+                        gen_result = await loop.run_in_executor(
+                            None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                        )
                         
-                        if current_values != prev_values:
-                            result = await loop.run_in_executor(
-                                None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
-                            )
-                            prev_values = current_values
-                            yield result
+                        if hasattr(gen_result, '__iter__') and not isinstance(gen_result, (list, dict, str)):
+                            for value in gen_result:
+                                yield value
+                                await asyncio.sleep(0.1)
+                        else:
+                            result = gen_result
+                            prev_values = args[0] if args else None
                             
-                        await asyncio.sleep(0.1)
+                            while True:
+                                current_values = args[0] if args else None
+                                
+                                if current_values != prev_values:
+                                    result = await loop.run_in_executor(
+                                        None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                                    )
+                                    prev_values = current_values
+                                    yield result
+                                
+                                await asyncio.sleep(0.1)
+                    except Exception as e:
+                        yield f"Error in persistent function: {str(e)}"
                 else:
                     result = await loop.run_in_executor(
                         None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None

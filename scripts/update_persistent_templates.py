@@ -49,28 +49,39 @@ def update_persistent_templates():
                     elif not line.strip().startswith('import ') and line.strip():
                         core_logic_lines.append(line)
                 
-                new_code = function_def_line + '\n'
-                for imp in import_lines:
-                    new_code += '    ' + imp + '\n'
+                new_code = []
+                new_code.append(function_def_line)
                 
-                new_code += '    import time\n'
-                new_code += '    import asyncio\n\n'
-                new_code += '    # Initial state\n'
-                new_code += '    previous_data = None\n\n'
-                new_code += '    # Continuous monitoring loop\n'
-                new_code += '    while True:\n'
-                new_code += '        # Only process if data has changed\n'
-                new_code += '        if data != previous_data:\n'
-                new_code += '            previous_data = data.copy() if isinstance(data, pd.DataFrame) else data\n\n'
+                for imp in import_lines:
+                    new_code.append('    ' + imp)
+                
+                new_code.append('    import time')
+                new_code.append('    import asyncio')
+                new_code.append('')
+                new_code.append('    # Initial state')
+                new_code.append('    previous_data = None')
+                new_code.append('')
+                new_code.append('    # Continuous monitoring loop')
+                new_code.append('    while True:')
+                new_code.append('        # Only process if data has changed')
+                new_code.append('        if data != previous_data:')
+                new_code.append('            previous_data = data.copy() if hasattr(data, "copy") else data')
+                new_code.append('')
                 
                 for line in core_logic_lines:
-                    new_code += '            ' + line + '\n'
+                    indent_count = len(line) - len(line.lstrip())
+                    if indent_count > 0:
+                        new_code.append('            ' + line)
+                    else:
+                        new_code.append('            ' + line.lstrip())
                 
                 for ret in return_lines:
-                    new_code += '            yield ' + ret + '\n'
+                    new_code.append('            yield ' + ret.strip())
                 
-                new_code += '        # Brief pause to prevent CPU hogging\n'
-                new_code += '        time.sleep(0.1)\n'
+                new_code.append('        # Brief pause to prevent CPU hogging')
+                new_code.append('        await asyncio.sleep(0.1)')
+                
+                new_code = '\n'.join(new_code)
                 
                 template_data['code'] = new_code
                 template_data['updated_at'] = time.time()
