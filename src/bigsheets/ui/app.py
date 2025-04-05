@@ -16,6 +16,8 @@ from bigsheets.core.spreadsheet_engine import Workbook, Sheet
 from bigsheets.ui.sheet_view import SheetView
 from bigsheets.data.csv_importer import CSVImporter
 from bigsheets.data.db_connector import DatabaseConnector
+from bigsheets.function_engine.function_manager import FunctionManager
+from bigsheets.ui.function_editor import FunctionEditorDialog
 
 
 class BigSheetsApp(QMainWindow):
@@ -28,6 +30,8 @@ class BigSheetsApp(QMainWindow):
         
         self.workbook = Workbook()
         self.workbook.create_sheet("Sheet1")
+        
+        self.function_manager = FunctionManager()
         
         self.init_ui()
         self.show()
@@ -126,6 +130,12 @@ class BigSheetsApp(QMainWindow):
         insert_image_action = QAction("&Image", self)
         insert_image_action.triggered.connect(self.insert_image)
         insert_menu.addAction(insert_image_action)
+        
+        functions_menu = self.menuBar().addMenu("&Functions")
+        
+        function_editor_action = QAction("&Function Editor", self)
+        function_editor_action.triggered.connect(self.open_function_editor)
+        functions_menu.addAction(function_editor_action)
     
     def add_sheet_tab(self, sheet_name):
         """Add a new sheet tab to the tab widget."""
@@ -414,3 +424,12 @@ class BigSheetsApp(QMainWindow):
         if current_index >= 0:
             sheet_view = self.tab_widget.widget(current_index)
             sheet_view.insert_image()
+    
+    def open_function_editor(self):
+        """Open the function editor dialog."""
+        try:
+            dialog = FunctionEditorDialog(self, self.function_manager)
+            dialog.exec_()
+            self.statusBar().showMessage("Function templates updated")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open function editor: {str(e)}")
