@@ -49,7 +49,12 @@ class DatabaseConnector:
             if streaming:
                 return self.stream_query(connection_id, query, chunk_size=chunk_size)
             else:
-                df = self.execute_query(connection_id, query)
+                df_generator = self.execute_query(connection_id, query)
+                
+                df = next(df_generator, pd.DataFrame())
+                
+                for chunk_df in df_generator:
+                    df = pd.concat([df, chunk_df], ignore_index=True)
                 
                 data = df.values.tolist()
                 
@@ -140,9 +145,9 @@ class DatabaseConnector:
     
     def execute_query(self, connection_id: str, query: str, 
                      params: Optional[Dict[str, Any]] = None,
-                     chunk_size: int = 1000) -> pd.DataFrame:
+                     chunk_size: int = 1000) -> Union[pd.DataFrame, Iterator[pd.DataFrame]]:
         """
-        Execute a SQL query and return the results as a DataFrame.
+        Execute a SQL query and return the results as a DataFrame or an iterator of DataFrames.
         
         Args:
             connection_id: Identifier for the connection to use
@@ -151,7 +156,7 @@ class DatabaseConnector:
             chunk_size: Number of rows to fetch at a time (for streaming)
             
         Returns:
-            DataFrame containing the query results
+            DataFrame containing the query results or an iterator of DataFrames for large result sets
         """
         if connection_id not in self.connections:
             raise ValueError(f"Connection '{connection_id}' does not exist")
@@ -167,7 +172,7 @@ class DatabaseConnector:
                 
                 columns = result.keys()
                 
-                df = pd.DataFrame(columns=columns)
+                yield pd.DataFrame(columns=columns)
                 
                 while True:
                     chunk = result.fetchmany(chunk_size)
@@ -175,9 +180,7 @@ class DatabaseConnector:
                         break
                     
                     chunk_df = pd.DataFrame(chunk, columns=columns)
-                    df = pd.concat([df, chunk_df], ignore_index=True)
-                
-                return df
+                    yield chunk_df
         except Exception as e:
             raise RuntimeError(f"Error executing query: {str(e)}")
     

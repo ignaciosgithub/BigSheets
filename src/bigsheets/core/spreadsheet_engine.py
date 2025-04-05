@@ -376,8 +376,11 @@ class Sheet:
                 self.old_function_id = old_function_id
                 self.old_result = old_result
                 self.selected_data = selected_data
-                self.persistent = True  # Default to persistent functions
-                self.multi_cell_result = False  # Flag for functions that output to multiple cells
+                
+                function_manager = FunctionManager()
+                template = function_manager.get_template(function_id)
+                self.persistent = template.is_persistent if template else False
+                
                 self.target_cells = []  # Store target cells for multi-cell output
                 
             def execute(self):
@@ -443,7 +446,16 @@ class Sheet:
                     if isinstance(result, list) and "_row_" in self.function_id.lower():
                         cell.function_result = "Multi-cell output"
                         cell.value = "See adjacent cells →"
-                        cell.target_cells = []
+                        
+                        if not hasattr(cell, 'target_cells') or cell.target_cells is None:
+                            cell.target_cells = []
+                        
+                        for target_row, target_col in cell.target_cells:
+                            target_cell = self.sheet.get_cell(target_row, target_col)
+                            target_cell.value = None
+                            target_cell.function_result = None
+                        
+                        cell.target_cells = []  # Start fresh after clearing
                         
                         for i, val in enumerate(result):
                             target_row = self.row
@@ -465,7 +477,16 @@ class Sheet:
                     elif isinstance(result, list) and not any(isinstance(x, list) for x in result):
                         cell.function_result = "Multi-cell output"
                         cell.value = "See cells below ↓"
-                        cell.target_cells = []
+                        
+                        if not hasattr(cell, 'target_cells') or cell.target_cells is None:
+                            cell.target_cells = []
+                        
+                        for target_row, target_col in cell.target_cells:
+                            target_cell = self.sheet.get_cell(target_row, target_col)
+                            target_cell.value = None
+                            target_cell.function_result = None
+                        
+                        cell.target_cells = []  # Start fresh after clearing
                         
                         for i, val in enumerate(result):
                             target_row = self.row + i + 1

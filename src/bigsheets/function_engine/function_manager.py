@@ -36,13 +36,15 @@ class FunctionTemplate:
             "code": self.code,
             "description": self.description,
             "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "updated_at": self.updated_at,
+            "is_persistent": self.is_persistent
         }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FunctionTemplate':
         """Create template from dictionary."""
-        template = cls(data["name"], data["code"], data["description"])
+        is_persistent = data.get("is_persistent", False)
+        template = cls(data["name"], data["code"], data["description"], is_persistent)
         template.id = data["id"]
         template.created_at = data["created_at"]
         template.updated_at = data["updated_at"]
