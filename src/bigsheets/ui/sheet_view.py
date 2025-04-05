@@ -134,24 +134,126 @@ class SheetView(QTableView):
     
     def insert_row(self):
         """Insert a row at the current position."""
-        pass
+        current_index = self.currentIndex()
+        if current_index.isValid():
+            row = current_index.row()
+            self.sheet.insert_row(row)
+            self.model.beginInsertRows(QModelIndex(), row, row)
+            self.model.endInsertRows()
+            self.setRowHeight(row, 25)
     
     def insert_column(self):
         """Insert a column at the current position."""
-        pass
+        current_index = self.currentIndex()
+        if current_index.isValid():
+            col = current_index.column()
+            self.sheet.insert_column(col)
+            self.model.beginInsertColumns(QModelIndex(), col, col)
+            self.model.endInsertColumns()
+            self.setColumnWidth(col, 100)
     
     def delete_row(self):
         """Delete the current row."""
-        pass
+        current_index = self.currentIndex()
+        if current_index.isValid():
+            row = current_index.row()
+            self.sheet.delete_row(row)
+            self.model.beginRemoveRows(QModelIndex(), row, row)
+            self.model.endRemoveRows()
     
     def delete_column(self):
         """Delete the current column."""
-        pass
+        current_index = self.currentIndex()
+        if current_index.isValid():
+            col = current_index.column()
+            self.sheet.delete_column(col)
+            self.model.beginRemoveColumns(QModelIndex(), col, col)
+            self.model.endRemoveColumns()
     
     def insert_chart(self):
         """Insert a chart based on selected data."""
-        pass
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QComboBox, QPushButton, QLabel, QHBoxLayout
+        from bigsheets.visualization.chart_engine import ChartEngine
+        
+        selected_ranges = self.selectedIndexes()
+        if not selected_ranges:
+            return
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Insert Chart")
+        layout = QVBoxLayout()
+        
+        type_layout = QHBoxLayout()
+        type_layout.addWidget(QLabel("Chart Type:"))
+        chart_type = QComboBox()
+        chart_type.addItems(["Bar Chart", "Line Chart", "Pie Chart", "Scatter Plot"])
+        type_layout.addWidget(chart_type)
+        layout.addLayout(type_layout)
+        
+        button_layout = QHBoxLayout()
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(dialog.reject)
+        insert_button = QPushButton("Insert")
+        insert_button.clicked.connect(dialog.accept)
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(insert_button)
+        layout.addLayout(button_layout)
+        
+        dialog.setLayout(layout)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            data = []
+            min_row = min(idx.row() for idx in selected_ranges)
+            max_row = max(idx.row() for idx in selected_ranges)
+            min_col = min(idx.column() for idx in selected_ranges)
+            max_col = max(idx.column() for idx in selected_ranges)
+            
+            for row in range(min_row, max_row + 1):
+                row_data = []
+                for col in range(min_col, max_col + 1):
+                    cell = self.sheet.get_cell(row, col)
+                    row_data.append(cell.value)
+                data.append(row_data)
+            
+            chart_engine = ChartEngine()
+            chart_type_str = chart_type.currentText().lower().replace(" ", "_")
+            
+            chart = chart_engine.create_chart(
+                chart_type=chart_type_str,
+                data=data,
+                title=f"{chart_type.currentText()} - {min_row},{min_col} to {max_row},{max_col}",
+                x_label=f"Row {min_row}",
+                y_label="Values"
+            )
+            
+            self.sheet.add_chart(chart, min_row, min_col)
     
     def insert_image(self):
         """Insert an image at the current position."""
-        pass
+        from PyQt5.QtWidgets import QFileDialog
+        from bigsheets.image.image_manager import ImageManager
+        
+        current_index = self.currentIndex()
+        if not current_index.isValid():
+            return
+        
+        row, col = current_index.row(), current_index.column()
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "Select Image", 
+            "", 
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.gif)"
+        )
+        
+        if file_path:
+            image_manager = ImageManager()
+            try:
+                image_data = image_manager.load_image(file_path)
+                
+                self.sheet.add_image(image_data, row, col)
+                
+                self.viewport().update()
+            except Exception as e:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Error", f"Failed to load image: {str(e)}")

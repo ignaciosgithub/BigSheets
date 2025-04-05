@@ -26,9 +26,9 @@ class ChartEngine:
     def create_chart(
         self,
         chart_type: str,
-        data: Union[pd.DataFrame, List[Dict[str, Any]]],
-        x_column: str,
-        y_columns: List[str],
+        data: Union[pd.DataFrame, List[List[Any]], List[Dict[str, Any]]],
+        x_column: Optional[str] = None,
+        y_columns: Optional[List[str]] = None,
         title: str = "",
         x_label: str = "",
         y_label: str = "",
@@ -53,7 +53,15 @@ class ChartEngine:
         if chart_type not in self.supported_chart_types:
             raise ValueError(f"Unsupported chart type: {chart_type}")
         
-        if isinstance(data, list):
+        if isinstance(data, list) and data and isinstance(data[0], list):
+            df = pd.DataFrame(data)
+            if x_column is None and y_columns is None:
+                x_column = 0
+                y_columns = list(range(1, len(df.columns)))
+                data = df
+            else:
+                data = df
+        elif isinstance(data, list) and data and isinstance(data[0], dict):
             data = pd.DataFrame(data)
         
         fig, ax = plt.subplots(figsize=(10, 6))

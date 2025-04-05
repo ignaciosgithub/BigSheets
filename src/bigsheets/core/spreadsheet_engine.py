@@ -102,9 +102,178 @@ class Sheet:
             cell = self.get_cell(row, col)
             cell.value = command['new_value']
             cell.formula = command['new_formula']
-        
+        elif command['type'] == 'insert_row':
+            self._insert_row_impl(command['row'])
+        elif command['type'] == 'delete_row':
+            self._delete_row_impl(command['row'], command['cells'])
+        elif command['type'] == 'insert_column':
+            self._insert_column_impl(command['col'])
+        elif command['type'] == 'delete_column':
+            self._delete_column_impl(command['col'], command['cells'])
         
         return True
+        
+    def insert_row(self, row: int) -> None:
+        """Insert a row at the specified position."""
+        command = {
+            'type': 'insert_row',
+            'row': row
+        }
+        
+        self._insert_row_impl(row)
+        
+        self.command_history.append(command)
+        self.redo_stack.clear()
+    
+    def _insert_row_impl(self, row: int) -> None:
+        """Implementation of row insertion."""
+        cells_to_move = {}
+        for (r, c), cell in self.cells.items():
+            if r >= row:
+                cells_to_move[(r + 1, c)] = cell
+        
+        for (r, c) in list(self.cells.keys()):
+            if r >= row:
+                del self.cells[(r, c)]
+        
+        for pos, cell in cells_to_move.items():
+            self.cells[pos] = cell
+        
+        self.rows += 1
+    
+    def delete_row(self, row: int) -> None:
+        """Delete a row at the specified position."""
+        deleted_cells = {}
+        for (r, c), cell in self.cells.items():
+            if r == row:
+                deleted_cells[(r, c)] = cell
+        
+        command = {
+            'type': 'delete_row',
+            'row': row,
+            'cells': deleted_cells
+        }
+        
+        self._delete_row_impl(row, deleted_cells)
+        
+        self.command_history.append(command)
+        self.redo_stack.clear()
+    
+    def _delete_row_impl(self, row: int, deleted_cells: Dict[Tuple[int, int], Cell]) -> None:
+        """Implementation of row deletion."""
+        for (r, c) in list(self.cells.keys()):
+            if r == row:
+                del self.cells[(r, c)]
+        
+        cells_to_move = {}
+        for (r, c), cell in self.cells.items():
+            if r > row:
+                cells_to_move[(r - 1, c)] = cell
+        
+        for (r, c) in list(self.cells.keys()):
+            if r > row:
+                del self.cells[(r, c)]
+        
+        for pos, cell in cells_to_move.items():
+            self.cells[pos] = cell
+        
+        self.rows -= 1
+    
+    def insert_column(self, col: int) -> None:
+        """Insert a column at the specified position."""
+        command = {
+            'type': 'insert_column',
+            'col': col
+        }
+        
+        self._insert_column_impl(col)
+        
+        self.command_history.append(command)
+        self.redo_stack.clear()
+    
+    def _insert_column_impl(self, col: int) -> None:
+        """Implementation of column insertion."""
+        cells_to_move = {}
+        for (r, c), cell in self.cells.items():
+            if c >= col:
+                cells_to_move[(r, c + 1)] = cell
+        
+        for (r, c) in list(self.cells.keys()):
+            if c >= col:
+                del self.cells[(r, c)]
+        
+        for pos, cell in cells_to_move.items():
+            self.cells[pos] = cell
+        
+        self.cols += 1
+    
+    def delete_column(self, col: int) -> None:
+        """Delete a column at the specified position."""
+        deleted_cells = {}
+        for (r, c), cell in self.cells.items():
+            if c == col:
+                deleted_cells[(r, c)] = cell
+        
+        command = {
+            'type': 'delete_column',
+            'col': col,
+            'cells': deleted_cells
+        }
+        
+        self._delete_column_impl(col, deleted_cells)
+        
+        self.command_history.append(command)
+        self.redo_stack.clear()
+    
+    def _delete_column_impl(self, col: int, deleted_cells: Dict[Tuple[int, int], Cell]) -> None:
+        """Implementation of column deletion."""
+        for (r, c) in list(self.cells.keys()):
+            if c == col:
+                del self.cells[(r, c)]
+        
+        cells_to_move = {}
+        for (r, c), cell in self.cells.items():
+            if c > col:
+                cells_to_move[(r, c - 1)] = cell
+        
+        for (r, c) in list(self.cells.keys()):
+            if c > col:
+                del self.cells[(r, c)]
+        
+        for pos, cell in cells_to_move.items():
+            self.cells[pos] = cell
+        
+        self.cols -= 1
+    
+    def add_chart(self, chart: Dict[str, Any], row: int, col: int) -> None:
+        """Add a chart to the sheet at the specified position."""
+        command = {
+            'type': 'add_chart',
+            'row': row,
+            'col': col,
+            'chart': chart
+        }
+        
+        cell = self.get_cell(row, col)
+        cell.chart = chart
+        
+        self.command_history.append(command)
+        self.redo_stack.clear()
+    
+    def add_image(self, image_data: Dict[str, Any], row: int, col: int) -> None:
+        """Add an image to the sheet at the specified position."""
+        command = {
+            'type': 'add_image',
+            'row': row,
+            'col': col,
+            'image_data': image_data
+        }
+        
+        cell = self.get_cell(row, col)
+        cell.image = image_data
+        
+        self.command_history.append(command)
+        self.redo_stack.clear()
 
 
 class Workbook:
