@@ -28,6 +28,7 @@ class FunctionTemplate:
         self.is_persistent = is_persistent
         self._compiled_function = None
         self._result_value = None
+        self._sheet = None  # Reference to the sheet for direct cell access
         
     def __repr__(self):
         """Return a string representation of the function result."""
@@ -62,7 +63,10 @@ class FunctionTemplate:
     def compile(self):
         """Compile the function code."""
         try:
-            namespace = {}
+            namespace = {
+                'get_cell_value': self.get_cell_value,
+                'set_cell_value': self.set_cell_value
+            }
             exec(self.code, namespace)
             
             function_name = None
@@ -79,8 +83,60 @@ class FunctionTemplate:
         except Exception as e:
             raise ValueError(f"Failed to compile function: {str(e)}")
     
-    async def execute(self, *args, **kwargs) -> Any:
+    def set_sheet(self, sheet):
+        """Set the sheet reference for direct cell access."""
+        self._sheet = sheet
+        
+    def get_cell_value(self, row: int, col: int) -> Any:
+        """
+        Get the value of a cell at the specified position.
+        
+        Args:
+            row: Row index
+            col: Column index
+            
+        Returns:
+            The cell value or None if the cell doesn't exist
+        """
+        if self._sheet is None:
+            return None
+        
+        try:
+            cell = self._sheet.get_cell(row, col)
+            return cell.value
+        except Exception as e:
+            error_msg = f"Error getting cell value: {str(e)}"
+            self._result_value = error_msg
+            return None
+    
+    def set_cell_value(self, row: int, col: int, value: Any) -> bool:
+        """
+        Set the value of a cell at the specified position.
+        
+        Args:
+            row: Row index
+            col: Column index
+            value: New cell value
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if self._sheet is None:
+            return False
+        
+        try:
+            self._sheet.set_cell_value(row, col, value)
+            return True
+        except Exception as e:
+            error_msg = f"Error setting cell value: {str(e)}"
+            self._result_value = error_msg
+            return False
+    
+    async def execute(self, data=None, sheet=None) -> Any:
         """Execute the function asynchronously."""
+        if sheet is not None:
+            self.set_sheet(sheet)
+            
         if self._compiled_function is None:
             self.compile()
             
@@ -89,7 +145,7 @@ class FunctionTemplate:
         
         try:
             if inspect.iscoroutinefunction(self._compiled_function):
-                result = await self._compiled_function(*args, **kwargs)
+                result = await self._compiled_function(data)
             else:
                 try:
                     loop = asyncio.get_event_loop()
@@ -100,7 +156,7 @@ class FunctionTemplate:
                 if self.is_persistent:
                     try:
                         gen_result = await loop.run_in_executor(
-                            None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                            None, lambda: self._compiled_function(data) if self._compiled_function is not None else None
                         )
                         
                         if hasattr(gen_result, '__iter__') and not isinstance(gen_result, (list, dict, str)):
@@ -119,14 +175,14 @@ class FunctionTemplate:
                                 await asyncio.sleep(0.1)
                         else:
                             result = gen_result
-                            prev_values = args[0] if args else None
+                            prev_values = data
                             
                             while True:
-                                current_values = args[0] if args else None
+                                current_values = data
                                 
                                 if current_values != prev_values:
                                     result = await loop.run_in_executor(
-                                        None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                                        None, lambda: self._compiled_function(data) if self._compiled_function is not None else None
                                     )
                                     prev_values = current_values
                                     
@@ -149,7 +205,7 @@ class FunctionTemplate:
                         yield error_msg
                 else:
                     result = await loop.run_in_executor(
-                        None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
+                        None, lambda: self._compiled_function(data) if self._compiled_function is not None else None
                     )
             
             self._result_value = result  # Set result value for __repr__ and __str__
@@ -231,13 +287,13 @@ class FunctionManager:
         """List all templates."""
         return [template.to_dict() for template in self.templates.values()]
     
-    async def execute_function(self, template_id: str, *args, **kwargs) -> Any:
+    async def execute_function(self, template_id: str, data=None, sheet=None) -> Any:
         """Execute a function template."""
         template = self.get_template(template_id)
         if not template:
             raise ValueError(f"Template with ID {template_id} not found")
         
-        return await template.execute(*args, **kwargs)
+        return await template.execute(data, sheet)
     
     def save_templates(self):
         """Save all templates to disk."""

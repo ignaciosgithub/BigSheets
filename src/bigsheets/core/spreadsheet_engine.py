@@ -447,9 +447,9 @@ class Sheet:
                         return
                     
                     if self.selected_data is not None:
-                        result_gen = template.execute(self.selected_data)
+                        result_gen = template.execute(self.selected_data, self.sheet)
                     else:
-                        result_gen = template.execute()
+                        result_gen = template.execute(sheet=self.sheet)
                     
                     if template.is_persistent and hasattr(result_gen, '__aiter__'):
                         async def update_task():
