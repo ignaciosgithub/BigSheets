@@ -63,6 +63,29 @@ class FunctionTemplate:
     def compile(self):
         """Compile the function code."""
         try:
+            if "global set_cell_value" not in self.code and "global get_cell_value" not in self.code:
+                function_name = None
+                for line in self.code.split('\n'):
+                    if line.strip().startswith('def '):
+                        function_name = line.strip().split('def ')[1].split('(')[0]
+                        break
+                
+                if function_name:
+                    code_lines = self.code.split('\n')
+                    function_line_index = -1
+                    
+                    for i, line in enumerate(code_lines):
+                        if line.strip().startswith(f'def {function_name}'):
+                            function_line_index = i
+                            break
+                    
+                    if function_line_index >= 0:
+                        indent = len(code_lines[function_line_index]) - len(code_lines[function_line_index].lstrip())
+                        global_declaration = ' ' * (indent + 4) + "global set_cell_value, get_cell_value"
+                        
+                        code_lines.insert(function_line_index + 1, global_declaration)
+                        self.code = '\n'.join(code_lines)
+            
             namespace = {
                 'get_cell_value': self.get_cell_value,
                 'set_cell_value': self.set_cell_value
@@ -134,6 +157,10 @@ class FunctionTemplate:
     
     async def execute(self, data=None, sheet=None) -> Any:
         """Execute the function asynchronously."""
+        global set_cell_value, get_cell_value
+        set_cell_value = self.set_cell_value
+        get_cell_value = self.get_cell_value
+        
         if sheet is not None:
             self.set_sheet(sheet)
             
