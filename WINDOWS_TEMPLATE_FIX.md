@@ -9,45 +9,22 @@ If you're experiencing the error "Function execution error: name 'set_cell_value
 git pull origin main
 ```
 
-2. Run the Windows template fix script:
+2. Run the improved Windows template fix script:
 ```bash
-python scripts/update_windows_appdata_templates.py
+python scripts/update_all_windows_templates.py
 ```
 
 3. Restart the BigSheets application
 
-## Manual Fix
+## Creating New Templates
 
-If the automatic fix doesn't work, you can manually update the template files:
+With the latest update, you no longer need to explicitly add global declarations for `set_cell_value` and `get_cell_value` in your templates. The execution context now handles this automatically.
 
-1. Navigate to your AppData folder: `C:\Users\[Username]\AppData\Roaming\BigSheets\functions`
+Example of a template function that will work correctly:
 
-2. For each JSON template file:
-   - Open the file in a text editor
-   - Find the function definition (`def function_name(data):`)
-   - Add the following line immediately after the function definition:
-     ```python
-     global set_cell_value, get_cell_value
-     ```
-   - Save the file
-
-3. Restart the BigSheets application
-
-## Testing the Fix
-
-To verify that the fix works:
-
-1. Run the test script:
-```bash
-python scripts/test_global_access.py
-```
-
-2. If all tests pass, the fix has been successfully applied
-
-3. Alternatively, create a simple template function that uses `set_cell_value` and verify that it works:
 ```python
-def test_function(data):
-    global set_cell_value, get_cell_value
+def my_template_function(data):
+    # No need for global declarations
     
     if data is None:
         set_cell_value(0, 0, "Error: No data provided")
@@ -55,26 +32,42 @@ def test_function(data):
     
     total = sum(data)
     set_cell_value(0, 0, total)
+    
+    for i, val in enumerate(data):
+        set_cell_value(1, i, val)
 ```
+
+## Testing the Fix
+
+To verify that the fix works:
+
+1. Run the verification script:
+```bash
+python scripts/verify_function_execution.py
+```
+
+2. If the test passes, the fix has been successfully applied
+
+3. Alternatively, create a simple template function without global declarations and verify that it works
 
 ## Troubleshooting
 
 If you continue to experience issues:
 
 1. Check the error message for clues
-2. Verify that the template files have been updated by opening them in a text editor
-3. Try creating a new template with the global declarations included
+2. Verify that you're using the latest version of the application
+3. Try running the verification script to check if the execution context is working properly
 4. Restart the application after making changes
-5. Check that the BigSheets application is using the correct AppData directory
-6. Ensure that the template files are valid JSON with properly formatted Python code
+5. Ensure that the BigSheets application is using the correct AppData directory
+6. Check that your template functions are using `set_cell_value` and `get_cell_value` correctly
 
 ## Technical Details
 
-The issue occurs because template functions need explicit global declarations to access the `set_cell_value` and `get_cell_value` functions. These functions allow templates to directly manipulate cell values in the spreadsheet.
+The application now ensures that template functions have access to `set_cell_value` and `get_cell_value` functions in all execution contexts, including when running in a separate thread or process.
 
-The fix works by:
-1. Adding global declarations to template code
-2. Ensuring that the functions are available in the global namespace during execution
-3. Properly handling template compilation and execution errors
+The improved fix works by:
+1. Modifying the execution context to automatically provide access to cell manipulation functions
+2. Using helper functions with proper global declarations in all execution contexts
+3. Ensuring consistent behavior across different types of templates (standard and persistent)
 
 If you need further assistance, please open an issue on the GitHub repository.

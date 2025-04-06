@@ -197,9 +197,13 @@ class FunctionTemplate:
                 
                 if self.is_persistent:
                     try:
-                        gen_result = await loop.run_in_executor(
-                            None, lambda: self._compiled_function(data) if self._compiled_function is not None else None
-                        )
+                        def run_with_globals():
+                            global set_cell_value, get_cell_value
+                            set_cell_value = self.set_cell_value
+                            get_cell_value = self.get_cell_value
+                            return self._compiled_function(data) if self._compiled_function is not None else None
+                            
+                        gen_result = await loop.run_in_executor(None, run_with_globals)
                         
                         if hasattr(gen_result, '__iter__') and not isinstance(gen_result, (list, dict, str)):
                             for value in gen_result:
@@ -223,9 +227,13 @@ class FunctionTemplate:
                                 current_values = data
                                 
                                 if current_values != prev_values:
-                                    result = await loop.run_in_executor(
-                                        None, lambda: self._compiled_function(data) if self._compiled_function is not None else None
-                                    )
+                                    def run_with_globals():
+                                        global set_cell_value, get_cell_value
+                                        set_cell_value = self.set_cell_value
+                                        get_cell_value = self.get_cell_value
+                                        return self._compiled_function(data) if self._compiled_function is not None else None
+                                    
+                                    result = await loop.run_in_executor(None, run_with_globals)
                                     prev_values = current_values
                                     
                                     if hasattr(result, '__iter__') and not isinstance(result, (list, dict, str)):
@@ -246,9 +254,13 @@ class FunctionTemplate:
                         self._result_value = error_msg  # Set result value for error messages
                         yield error_msg
                 else:
-                    result = await loop.run_in_executor(
-                        None, lambda: self._compiled_function(data) if self._compiled_function is not None else None
-                    )
+                    def run_with_globals():
+                        global set_cell_value, get_cell_value
+                        set_cell_value = self.set_cell_value
+                        get_cell_value = self.get_cell_value
+                        return self._compiled_function(data) if self._compiled_function is not None else None
+                    
+                    result = await loop.run_in_executor(None, run_with_globals)
             
             self._result_value = result  # Set result value for __repr__ and __str__
             return result
