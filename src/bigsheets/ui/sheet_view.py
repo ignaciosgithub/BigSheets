@@ -785,7 +785,7 @@ def persistent_sum_columns(data=None):
     import asyncio
     
     if data is None:
-        yield "Error: No data selected"
+        set_cell_value(0, 0, "Error: No data selected")
         return
     
     previous_data = None
@@ -800,12 +800,14 @@ def persistent_sum_columns(data=None):
                 if len(df) == 1 or len(df.columns) == 1:
                     flat_data = df.values.flatten()
                     result = float(np.sum(flat_data))
+                    set_cell_value(0, 0, result)
                 else:
                     result = df.sum().tolist()
-                
-                yield result
+                    for i, val in enumerate(result):
+                        set_cell_value(0, i, val)
             except Exception as e:
-                yield f"Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
+                set_cell_value(0, 0, error_msg)
         
         await asyncio.sleep(0.1)
 '''
@@ -819,7 +821,7 @@ def persistent_average_columns(data=None):
     import asyncio
     
     if data is None:
-        yield "Error: No data selected"
+        set_cell_value(0, 0, "Error: No data selected")
         return
     
     previous_data = None
@@ -834,12 +836,14 @@ def persistent_average_columns(data=None):
                 if len(df) == 1 or len(df.columns) == 1:
                     flat_data = df.values.flatten()
                     result = float(np.mean(flat_data))
+                    set_cell_value(0, 0, result)
                 else:
                     result = df.mean().tolist()
-                
-                yield result
+                    for i, val in enumerate(result):
+                        set_cell_value(0, i, val)
             except Exception as e:
-                yield f"Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
+                set_cell_value(0, 0, error_msg)
         
         await asyncio.sleep(0.1)
 '''
@@ -853,7 +857,7 @@ def persistent_row_sum(data=None):
     import asyncio
     
     if data is None:
-        yield "Error: No data selected"
+        set_cell_value(0, 0, "Error: No data selected")
         return
     
     previous_data = None
@@ -865,9 +869,12 @@ def persistent_row_sum(data=None):
             try:
                 df = pd.DataFrame(data)
                 result = df.sum(axis=1).tolist()
-                yield result
+                
+                for i, val in enumerate(result):
+                    set_cell_value(i, 0, val)
             except Exception as e:
-                yield f"Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
+                set_cell_value(0, 0, error_msg)
         
         await asyncio.sleep(0.1)
 '''
@@ -881,7 +888,7 @@ def persistent_row_average(data=None):
     import asyncio
     
     if data is None:
-        yield "Error: No data selected"
+        set_cell_value(0, 0, "Error: No data selected")
         return
     
     previous_data = None
@@ -893,9 +900,12 @@ def persistent_row_average(data=None):
             try:
                 df = pd.DataFrame(data)
                 result = df.mean(axis=1).tolist()
-                yield result
+                
+                for i, val in enumerate(result):
+                    set_cell_value(i, 0, val)
             except Exception as e:
-                yield f"Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
+                set_cell_value(0, 0, error_msg)
         
         await asyncio.sleep(0.1)
 '''
@@ -913,7 +923,7 @@ def persistent_benfords_law(data=None):
     import asyncio
     
     if data is None:
-        yield "Error: No data selected"
+        set_cell_value(0, 0, "Error: No data selected")
         return
         
     previous_data = None
@@ -921,63 +931,79 @@ def persistent_benfords_law(data=None):
     while True:
         if data != previous_data:
             previous_data = data.copy() if hasattr(data, "copy") else data
-    
-    try:
-        df = pd.DataFrame(data)
-        flat_data = df.values.flatten()
+            
+            try:
+                df = pd.DataFrame(data)
+                flat_data = df.values.flatten()
+                
+                first_digits = []
+                for num in flat_data:
+                    if num > 0:
+                        str_num = str(abs(num)).strip('0.')
+                        if str_num:
+                            first_digits.append(int(str_num[0]))
+                
+                if not first_digits:
+                    set_cell_value(0, 0, "No valid positive numbers found in selection")
+                    continue
+                
+                digit_counts = {}
+                for d in range(1, 10):  # Benford's Law applies to digits 1-9
+                    digit_counts[d] = first_digits.count(d) / len(first_digits)
+                
+                benford_expected = {
+                    1: 0.301, 2: 0.176, 3: 0.125, 4: 0.097, 
+                    5: 0.079, 6: 0.067, 7: 0.058, 8: 0.051, 9: 0.046
+                }
+                
+                fig = Figure(figsize=(8, 6))
+                ax = fig.add_subplot(111)
+                
+                digits = list(range(1, 10))
+                observed = [digit_counts.get(d, 0) for d in digits]
+                expected = [benford_expected[d] for d in digits]
+                
+                x = np.arange(len(digits))
+                width = 0.35
+                
+                ax.bar(x - width/2, observed, width, label='Observed')
+                ax.bar(x + width/2, expected, width, label='Expected (Benford\'s Law)')
+                
+                ax.set_xlabel('First Digit')
+                ax.set_ylabel('Frequency')
+                ax.set_title('Benford\'s Law Analysis')
+                ax.set_xticks(x)
+                ax.set_xticklabels(digits)
+                ax.legend()
+                
+                canvas = FigureCanvasAgg(fig)
+                buf = io.BytesIO()
+                canvas.print_png(buf)
+                data_img = base64.b64encode(buf.getbuffer()).decode("ascii")
+                
+                result = {
+                    "image": f"data:image/png;base64,{data_img}",
+                    "summary": {d: {"observed": digit_counts.get(d, 0), "expected": benford_expected[d]} for d in range(1, 10)}
+                }
+                
+                # Set the result to the cell
+                set_cell_value(0, 0, result)
+                
+                # Also set summary data to adjacent cells
+                set_cell_value(0, 1, "Digit")
+                set_cell_value(0, 2, "Observed")
+                set_cell_value(0, 3, "Expected")
+                
+                for i, d in enumerate(range(1, 10)):
+                    set_cell_value(i+1, 1, d)
+                    set_cell_value(i+1, 2, digit_counts.get(d, 0))
+                    set_cell_value(i+1, 3, benford_expected[d])
+                
+            except Exception as e:
+                error_msg = f"Error in Benford's analysis: {str(e)}"
+                set_cell_value(0, 0, error_msg)
         
-        first_digits = []
-        for num in flat_data:
-            if num > 0:
-                str_num = str(abs(num)).strip('0.')
-                if str_num:
-                    first_digits.append(int(str_num[0]))
-        
-        if not first_digits:
-            return "No valid positive numbers found in selection"
-        
-        digit_counts = {}
-        for d in range(1, 10):  # Benford's Law applies to digits 1-9
-            digit_counts[d] = first_digits.count(d) / len(first_digits)
-        
-        benford_expected = {
-            1: 0.301, 2: 0.176, 3: 0.125, 4: 0.097, 
-            5: 0.079, 6: 0.067, 7: 0.058, 8: 0.051, 9: 0.046
-        }
-        
-        fig = Figure(figsize=(8, 6))
-        ax = fig.add_subplot(111)
-        
-        digits = list(range(1, 10))
-        observed = [digit_counts.get(d, 0) for d in digits]
-        expected = [benford_expected[d] for d in digits]
-        
-        x = np.arange(len(digits))
-        width = 0.35
-        
-        ax.bar(x - width/2, observed, width, label='Observed')
-        ax.bar(x + width/2, expected, width, label='Expected (Benford\\'s Law)')
-        
-        ax.set_xlabel('First Digit')
-        ax.set_ylabel('Frequency')
-        ax.set_title('Benford\\'s Law Analysis')
-        ax.set_xticks(x)
-        ax.set_xticklabels(digits)
-        ax.legend()
-        
-        canvas = FigureCanvasAgg(fig)
-        buf = io.BytesIO()
-        canvas.print_png(buf)
-        data = base64.b64encode(buf.getbuffer()).decode("ascii")
-        
-        result = {
-            "image": f"data:image/png;base64,{data}",
-            "summary": {d: {"observed": digit_counts.get(d, 0), "expected": benford_expected[d]} for d in range(1, 10)}
-        }
-        
-        return result
-    except Exception as e:
-        return f"Error in Benford's analysis: {str(e)}"
+        await asyncio.sleep(0.1)
 '''
             
             function_manager.create_template("Persistent Sum Columns", persistent_sum_function_code, 
@@ -1004,8 +1030,8 @@ def cell_accessor(data=None):
     a1_value = get_cell_value(0, 0)
     
     set_cell_value(0, 1, f"Value from A1: {a1_value}")
+    set_cell_value(0, 2, f"Accessed cell A1 with value: {a1_value}")
     
-    return f"Accessed cell A1 with value: {a1_value}"
 '''
 
             persistent_cell_accessor_template = '''
@@ -1015,7 +1041,7 @@ def persistent_cell_accessor(data=None):
     import time
     
     if data is None:
-        yield "Error: No data selected"
+        set_cell_value(0, 0, "Error: No data selected")
         return
     
     previous_data = None
@@ -1032,10 +1058,10 @@ def persistent_cell_accessor(data=None):
                 
                 set_cell_value(0, 2, f"From A1: {cell_a1}")
                 set_cell_value(1, 2, f"From A2: {cell_a2}")
-                
-                yield result
+                set_cell_value(0, 3, result)
             except Exception as e:
-                yield f"Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
+                set_cell_value(0, 0, error_msg)
         
         await asyncio.sleep(0.1)
 '''
