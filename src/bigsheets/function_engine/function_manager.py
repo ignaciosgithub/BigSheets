@@ -144,7 +144,9 @@ class FunctionTemplate:
                                 
                                 await asyncio.sleep(0.1)
                     except Exception as e:
-                        yield f"Error in persistent function: {str(e)}"
+                        error_msg = f"Error in persistent function: {str(e)}"
+                        self._result_value = error_msg  # Set result value for error messages
+                        yield error_msg
                 else:
                     result = await loop.run_in_executor(
                         None, lambda: self._compiled_function(*args, **kwargs) if self._compiled_function is not None else None
