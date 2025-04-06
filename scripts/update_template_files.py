@@ -6,6 +6,13 @@ def update_template_code(code):
     """
     Update template code to use direct cell access methods instead of return statements.
     """
+    if "get_cell_value(" in code and "set_cell_value(" in code:
+        pass
+    elif "def get_cell_value(" not in code and "def set_cell_value(" not in code:
+        cell_access_comment = """
+"""
+        code = cell_access_comment + code
+    
     imports_added = False
     if "import asyncio" not in code and "import time" not in code:
         code_lines = code.split('\n')
