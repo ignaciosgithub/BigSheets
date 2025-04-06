@@ -193,6 +193,22 @@ class FunctionTemplate:
                 return
             return error_msg
         
+        if self._sheet is None:
+            error_msg = "Error: No sheet object available for cell access"
+            self._result_value = error_msg
+            if self.is_persistent:
+                yield error_msg
+                return
+            return error_msg
+            
+        if not hasattr(self._sheet, 'set_cell_value'):
+            error_msg = f"Error: Invalid sheet object (type: {type(self._sheet).__name__})"
+            self._result_value = error_msg
+            if self.is_persistent:
+                yield error_msg
+                return
+            return error_msg
+            
         try:
             if inspect.iscoroutinefunction(self._compiled_function):
                 result = await self._compiled_function(self._sheet, data)
@@ -206,9 +222,19 @@ class FunctionTemplate:
                 if self.is_persistent:
                     try:
                         def run_with_current_sheet():
-                            return self._compiled_function(self._sheet, data) if self._compiled_function is not None else None
+                            if self._compiled_function is not None:
+                                if hasattr(self._sheet, 'set_cell_value'):
+                                    return self._compiled_function(self._sheet, data)
+                                else:
+                                    return f"Error: Invalid sheet object (type: {type(self._sheet).__name__})"
+                            return None
                             
                         gen_result = await loop.run_in_executor(None, run_with_current_sheet)
+                        
+                        if isinstance(gen_result, str) and gen_result.startswith("Error:"):
+                            self._result_value = gen_result
+                            yield gen_result
+                            return
                         
                         if hasattr(gen_result, '__iter__') and not isinstance(gen_result, (list, dict, str)):
                             for value in gen_result:
@@ -233,9 +259,20 @@ class FunctionTemplate:
                                 
                                 if current_values != prev_values:
                                     def run_with_current_sheet():
-                                        return self._compiled_function(self._sheet, data) if self._compiled_function is not None else None
+                                        if self._compiled_function is not None:
+                                            if hasattr(self._sheet, 'set_cell_value'):
+                                                return self._compiled_function(self._sheet, data)
+                                            else:
+                                                return f"Error: Invalid sheet object (type: {type(self._sheet).__name__})"
+                                        return None
                                     
                                     result = await loop.run_in_executor(None, run_with_current_sheet)
+                                    
+                                    if isinstance(result, str) and result.startswith("Error:"):
+                                        self._result_value = result
+                                        yield result
+                                        return
+                                        
                                     prev_values = current_values
                                     
                                     if hasattr(result, '__iter__') and not isinstance(result, (list, dict, str)):
@@ -257,9 +294,18 @@ class FunctionTemplate:
                         yield error_msg
                 else:
                     def run_with_current_sheet():
-                        return self._compiled_function(self._sheet, data) if self._compiled_function is not None else None
+                        if self._compiled_function is not None:
+                            if hasattr(self._sheet, 'set_cell_value'):
+                                return self._compiled_function(self._sheet, data)
+                            else:
+                                return f"Error: Invalid sheet object (type: {type(self._sheet).__name__})"
+                        return None
                     
                     result = await loop.run_in_executor(None, run_with_current_sheet)
+                    
+                    if isinstance(result, str) and result.startswith("Error:"):
+                        self._result_value = result
+                        return result
             
             self._result_value = result  # Set result value for __repr__ and __str__
             return result
