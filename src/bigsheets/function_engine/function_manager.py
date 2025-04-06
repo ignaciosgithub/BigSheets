@@ -138,10 +138,25 @@ class FunctionTemplate:
             self.set_sheet(sheet)
             
         if self._compiled_function is None:
-            self.compile()
+            try:
+                self.compile()
+            except Exception as e:
+                error_msg = f"Error compiling function: {str(e)}"
+                self._result_value = error_msg
+                if self.is_persistent:
+                    yield error_msg
+                    return
+                else:
+                    return error_msg
             
         if self._compiled_function is None:
-            return None
+            error_msg = "No function defined in template"
+            self._result_value = error_msg
+            if self.is_persistent:
+                yield error_msg
+                return
+            else:
+                return error_msg
         
         try:
             if inspect.iscoroutinefunction(self._compiled_function):
