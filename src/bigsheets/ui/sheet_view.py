@@ -996,6 +996,56 @@ def persistent_benfords_law(data=None):
                                            "Analyzes first digit frequencies using Benford's Law and updates automatically when source values change",
                                            is_persistent=True)
             
+            direct_cell_access_template = '''
+def cell_accessor(data=None):
+    """Template function with direct cell access capabilities."""
+    import time
+    
+    a1_value = get_cell_value(0, 0)
+    
+    set_cell_value(0, 1, f"Value from A1: {a1_value}")
+    
+    return f"Accessed cell A1 with value: {a1_value}"
+'''
+
+            persistent_cell_accessor_template = '''
+def persistent_cell_accessor(data=None):
+    """Persistent template function with direct cell access capabilities."""
+    import asyncio
+    import time
+    
+    if data is None:
+        yield "Error: No data selected"
+        return
+    
+    previous_data = None
+    
+    while True:
+        if data != previous_data:
+            previous_data = data.copy() if hasattr(data, "copy") else data
+            
+            try:
+                cell_a1 = get_cell_value(0, 0)
+                cell_a2 = get_cell_value(1, 0)
+                
+                result = f"A1={cell_a1}, A2={cell_a2}"
+                
+                set_cell_value(0, 2, f"From A1: {cell_a1}")
+                set_cell_value(1, 2, f"From A2: {cell_a2}")
+                
+                yield result
+            except Exception as e:
+                yield f"Error: {str(e)}"
+        
+        await asyncio.sleep(0.1)
+'''
+
+            function_manager.create_template("Cell Accessor", direct_cell_access_template, 
+                                          "Demonstrates direct cell access capabilities",
+                                          is_persistent=False)
+            function_manager.create_template("Persistent Cell Accessor", persistent_cell_accessor_template, 
+                                          "Demonstrates persistent direct cell access capabilities",
+                                          is_persistent=True)
 
             function_manager.save_templates()
         except Exception as e:
