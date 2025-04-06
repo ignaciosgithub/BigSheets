@@ -14,6 +14,29 @@ def update_template_code(code):
     Update template code to ensure it can access set_cell_value and get_cell_value.
     """
     if "set_cell_value(" in code or "get_cell_value(" in code:
+        if "global set_cell_value" not in code and "global get_cell_value" not in code:
+            function_name = None
+            for line in code.split('\n'):
+                if line.strip().startswith('def '):
+                    function_name = line.strip().split('def ')[1].split('(')[0]
+                    break
+            
+            if function_name:
+                lines = code.split('\n')
+                function_line_index = -1
+                
+                for i, line in enumerate(lines):
+                    if line.strip().startswith(f'def {function_name}'):
+                        function_line_index = i
+                        break
+                
+                if function_line_index >= 0:
+                    indent = len(lines[function_line_index]) - len(lines[function_line_index].lstrip())
+                    global_declaration = ' ' * (indent + 4) + "global set_cell_value, get_cell_value"
+                    
+                    lines.insert(function_line_index + 1, global_declaration)
+                    code = '\n'.join(lines)
+        
         return code
     
     imports_to_add = []
