@@ -63,28 +63,42 @@ class FunctionTemplate:
     def compile(self):
         """Compile the function code."""
         try:
-            if "global set_cell_value" not in self.code and "global get_cell_value" not in self.code:
-                function_name = None
-                for line in self.code.split('\n'):
-                    if line.strip().startswith('def '):
-                        function_name = line.strip().split('def ')[1].split('(')[0]
+            function_name = None
+            function_sig = None
+            for line in self.code.split('\n'):
+                if line.strip().startswith('def '):
+                    function_name = line.strip().split('def ')[1].split('(')[0]
+                    function_sig = line.strip()
+                    break
+            
+            if function_name is None:
+                raise ValueError("No function defined in code")
+            
+            if 'current_sheet' not in function_sig:
+                code_lines = self.code.split('\n')
+                function_line_index = -1
+                
+                for i, line in enumerate(code_lines):
+                    if line.strip().startswith(f'def {function_name}'):
+                        function_line_index = i
                         break
                 
-                if function_name:
-                    code_lines = self.code.split('\n')
-                    function_line_index = -1
+                if function_line_index >= 0:
+                    sig_parts = code_lines[function_line_index].split('(')
+                    params_part = sig_parts[1].split(')')[0].strip()
                     
-                    for i, line in enumerate(code_lines):
-                        if line.strip().startswith(f'def {function_name}'):
-                            function_line_index = i
-                            break
+                    if params_part:
+                        new_sig = f"{sig_parts[0]}(current_sheet, {params_part})"
+                    else:
+                        new_sig = f"{sig_parts[0]}(current_sheet)"
                     
-                    if function_line_index >= 0:
-                        indent = len(code_lines[function_line_index]) - len(code_lines[function_line_index].lstrip())
-                        global_declaration = ' ' * (indent + 4) + "global set_cell_value, get_cell_value"
-                        
-                        code_lines.insert(function_line_index + 1, global_declaration)
-                        self.code = '\n'.join(code_lines)
+                    if len(sig_parts[1].split(')')) > 1:
+                        new_sig += f"){sig_parts[1].split(')')[1]}"
+                    else:
+                        new_sig += "):"
+                    
+                    code_lines[function_line_index] = new_sig
+                    self.code = '\n'.join(code_lines)
             
             namespace = {
                 'get_cell_value': self.get_cell_value,
@@ -155,12 +169,8 @@ class FunctionTemplate:
             self._result_value = error_msg
             return False
     
-    async def execute(self, data=None, sheet=None) -> Any:
+    async def execute(self, data=None, sheet=None):
         """Execute the function asynchronously."""
-        global set_cell_value, get_cell_value
-        set_cell_value = self.set_cell_value
-        get_cell_value = self.get_cell_value
-        
         if sheet is not None:
             self.set_sheet(sheet)
             
@@ -173,8 +183,7 @@ class FunctionTemplate:
                 if self.is_persistent:
                     yield error_msg
                     return
-                else:
-                    return error_msg
+                return error_msg
             
         if self._compiled_function is None:
             error_msg = "No function defined in template"
@@ -182,12 +191,11 @@ class FunctionTemplate:
             if self.is_persistent:
                 yield error_msg
                 return
-            else:
-                return error_msg
+            return error_msg
         
         try:
             if inspect.iscoroutinefunction(self._compiled_function):
-                result = await self._compiled_function(data)
+                result = await self._compiled_function(self._sheet, data)
             else:
                 try:
                     loop = asyncio.get_event_loop()
@@ -197,13 +205,10 @@ class FunctionTemplate:
                 
                 if self.is_persistent:
                     try:
-                        def run_with_globals():
-                            global set_cell_value, get_cell_value
-                            set_cell_value = self.set_cell_value
-                            get_cell_value = self.get_cell_value
-                            return self._compiled_function(data) if self._compiled_function is not None else None
+                        def run_with_current_sheet():
+                            return self._compiled_function(self._sheet, data) if self._compiled_function is not None else None
                             
-                        gen_result = await loop.run_in_executor(None, run_with_globals)
+                        gen_result = await loop.run_in_executor(None, run_with_current_sheet)
                         
                         if hasattr(gen_result, '__iter__') and not isinstance(gen_result, (list, dict, str)):
                             for value in gen_result:
@@ -227,13 +232,10 @@ class FunctionTemplate:
                                 current_values = data
                                 
                                 if current_values != prev_values:
-                                    def run_with_globals():
-                                        global set_cell_value, get_cell_value
-                                        set_cell_value = self.set_cell_value
-                                        get_cell_value = self.get_cell_value
-                                        return self._compiled_function(data) if self._compiled_function is not None else None
+                                    def run_with_current_sheet():
+                                        return self._compiled_function(self._sheet, data) if self._compiled_function is not None else None
                                     
-                                    result = await loop.run_in_executor(None, run_with_globals)
+                                    result = await loop.run_in_executor(None, run_with_current_sheet)
                                     prev_values = current_values
                                     
                                     if hasattr(result, '__iter__') and not isinstance(result, (list, dict, str)):
@@ -254,13 +256,10 @@ class FunctionTemplate:
                         self._result_value = error_msg  # Set result value for error messages
                         yield error_msg
                 else:
-                    def run_with_globals():
-                        global set_cell_value, get_cell_value
-                        set_cell_value = self.set_cell_value
-                        get_cell_value = self.get_cell_value
-                        return self._compiled_function(data) if self._compiled_function is not None else None
+                    def run_with_current_sheet():
+                        return self._compiled_function(self._sheet, data) if self._compiled_function is not None else None
                     
-                    result = await loop.run_in_executor(None, run_with_globals)
+                    result = await loop.run_in_executor(None, run_with_current_sheet)
             
             self._result_value = result  # Set result value for __repr__ and __str__
             return result
